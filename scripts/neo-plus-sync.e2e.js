@@ -109,6 +109,39 @@ test('typing in NEO reaches the chapter Doc and the Master', async () => {
   assert.match(await fake({ do: 'text', id: (await master()).id }), /harbor\. Again\./);
 });
 
+test('a chapter left out of the Master: its own Doc still updates, the Master goes without it', async () => {
+  const [, , c3] = await chIds();
+  // right-click it in the Chapters pane → In the Master Manuscript (ticked: untick it)
+  const menuItem = () => js(`(async () => {
+    document.querySelector('.nav-item[data-id="${c3}"]').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 40 }));
+    await new Promise((r) => setTimeout(r, 300));
+    const b = [...document.querySelectorAll('.pop-menu button')].find((x) => x.textContent === 'In the Master Manuscript');
+    const on = b && b.getAttribute('aria-checked');
+    if (b) b.click();
+    return on;
+  })()`);
+  assert.equal(await menuItem(), 'true', 'ticked at first');
+  await tick(1500);
+  await sync();
+  let text = await fake({ do: 'text', id: (await master()).id });
+  assert.doesNotMatch(text, /The Labyrinth/, 'not in the contents or the pages');
+  assert.doesNotMatch(text, /Dark\./);
+  assert.match(text, /The Keeper’s House/);
+  assert.equal(await js(`!!document.querySelector('.nav-item[data-id="${c3}"] .nd-mo-tag')`), true, 'marked in the Chapters pane');
+  await typeInNeo(c3, ' Very dark.');
+  await sync();
+  assert.match(await fake({ do: 'text', id: (await docFor(c3)).id }), /Very dark\./, 'its own Doc still updates');
+  assert.doesNotMatch(await fake({ do: 'text', id: (await master()).id }), /Very dark/);
+  // and back in
+  assert.equal(await menuItem(), 'false');
+  await tick(1500);
+  await sync();
+  text = await fake({ do: 'text', id: (await master()).id });
+  assert.match(text, /Chapter 3: The Labyrinth/);
+  assert.match(text, /Very dark\./);
+  assert.equal(await js(`!!document.querySelector('.nav-item[data-id="${c3}"] .nd-mo-tag')`), false);
+});
+
 test('italics made in NEO arrive as italics', async () => {
   const [, c2] = await chIds();
   await js(`(() => {

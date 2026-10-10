@@ -89,6 +89,8 @@ The Notepad and Chapter Notes are in the book's **Notes** folder in Drive, and t
 
 **Edited in both places at once** (or offline on both sides)? Nothing is thrown away: NEO keeps its version as **version N**, and the Doc's comes in right after it as **version G**. Merge them yourself, then delete the one you don't need.
 
+**Keeping a draft out of the Master Manuscript.** Right-click a chapter in the Chapters pane and untick **In the Master Manuscript**. The chapter leaves the Master (its pages and its contents line) so readers you've shared it with don't see a rough draft, and it's marked "Not in Master" in the pane. Its own chapter Doc still updates as you write. Tick it again when it's ready and it goes back in, in its place.
+
 **Things to know**
 
 - A book syncs while it's open in NEO. Books you don't open aren't touched.

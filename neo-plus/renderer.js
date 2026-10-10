@@ -265,6 +265,7 @@
     // (a part's number is the one it shows: a second volume's first part can
     // be Part IV; a part with no label takes the number before it, with "a")
     let section = 0, partsSeen = 0;
+    const masterOut = new Set(Array.isArray(book.ndMasterOut) ? book.ndMasterOut : []);
     const P = window.NeoPlusParts;
     for (const chId of book.chapterOrder) {
       const kind = chapterKind(chId);
@@ -301,6 +302,9 @@
         continue;
       }
       entries.push({ chId, kind, heads, name, label, section, blocks, part });
+      // left out of the Master (a draft not ready to share): its own Doc
+      // still syncs, the Master and its contents go without it
+      if (masterOut.has(chId)) continue;
       // in the contents, the chapter's title in italic, as in its heading
       if (heads.length && !FRONT_PAGES.includes(kind)) {
         const it = heads.length === 1 ? (heads[0].marks || []).find((x) => String(x[2]).includes('i')) : null;
@@ -329,7 +333,7 @@
     const model = bookModel();
     const notes = Panels ? Panels.notesForModel() : null;
     if (notes) model.notes = notes;
-    const sig = JSON.stringify([model.book, model.parts, model.notes || null, model.entries.map((e) => [e.chId, e.kind, e.part, e.name, e.label, e.section, (e.heads || []).map(DB.blockKey), e.blocks.map(DB.blockKey)]), model.master.length]);
+    const sig = JSON.stringify([model.book, model.parts, model.notes || null, model.entries.map((e) => [e.chId, e.kind, e.part, e.name, e.label, e.section, (e.heads || []).map(DB.blockKey), e.blocks.map(DB.blockKey)]), model.master.length, book.ndMasterOut || []]);
     syncing = true;
     try {
       const r = await window.neo.neoPlus({ op: 'sync', model: { ...model, dirty: force || sig !== lastSig, force: !!force } });
@@ -531,6 +535,75 @@
   }
   setInterval(syncSpellAttrs, 500);
   window.NeoPlusSpell = { get system() { return sysSpell; }, sync: syncSpellAttrs };
+
+  // ------------------------------------- chapters left out of the Master
+  // A chapter's menu (right-click in the Chapters pane) has "In the Master
+  // Manuscript", ticked unless the chapter is left out (book.ndMasterOut).
+  // Left out, the chapter's own Doc still syncs; the Master, the one shared
+  // with readers, goes without it until it's ticked again.
+  const masterOutList = () => (Array.isArray(book && book.ndMasterOut) ? book.ndMasterOut : []);
+  const inMaster = (chId) => !masterOutList().includes(chId);
+  function setInMaster(chId, on) {
+    const out = masterOutList().filter((x) => x !== chId);
+    if (!on) out.push(chId);
+    if (out.length) book.ndMasterOut = out; else delete book.ndMasterOut;
+    scheduleMetaSave();
+    markMasterOut();
+    toast(on ? t('“{name}” is in the Master Manuscript again.', { name: chapterName(chId) })
+      : t('“{name}” is left out of the Master Manuscript. Its own Google Doc still updates.', { name: chapterName(chId) }), 7000);
+    if (drive.connected) setTimeout(() => driveTick(true).catch(() => {}), 1200);
+  }
+  function markMasterOut() {
+    if (!book) return;
+    const out = new Set(masterOutList());
+    for (const item of document.querySelectorAll('#nav-pane .nav-item[data-id]')) {
+      const off = out.has(item.dataset.id);
+      item.classList.toggle('nd-master-out', off);
+      let tag = item.querySelector('.nd-mo-tag');
+      if (off && !tag) {
+        tag = document.createElement('span');
+        tag.className = 'nd-mo-tag';
+        tag.textContent = t('Not in Master');
+        tag.title = t('Left out of the Master Manuscript (right-click to put it back)');
+        const label = item.querySelector('.n-label');
+        if (label) label.after(tag);
+      } else if (!off && tag) tag.remove();
+    }
+  }
+  if (typeof window.renderNav === 'function') {
+    const ownNav = window.renderNav;
+    window.renderNav = function () { const r = ownNav.apply(this, arguments); try { markMasterOut(); } catch { /* only marks */ } return r; };
+  }
+  let masterMenu = null; // { chId, at }: the chapter whose menu is about to open
+  if (typeof window.chapterMenu === 'function' && typeof window.popMenu === 'function') {
+    const ownMenu = window.chapterMenu;
+    const ownPop = window.popMenu;
+    window.chapterMenu = function (chId) {
+      masterMenu = chapterKind(chId) !== 'part' && chapterKind(chId) !== 'contents' ? { chId, at: Date.now() } : null;
+      return ownMenu.apply(this, arguments);
+    };
+    window.popMenu = function (x, y, items, opts) {
+      const ch = masterMenu && Date.now() - masterMenu.at < 3000 ? masterMenu.chId : null;
+      masterMenu = null;
+      if (!ch || !Array.isArray(items)) return ownPop.apply(this, arguments);
+      const list = [...items];
+      const del = list.findIndex((i) => i && i.value === 'delete');
+      const mine = ['-', { label: t('In the Master Manuscript'), value: 'nd-master', checked: inMaster(ch) }];
+      list.splice(del > 0 ? del - (list[del - 1] === '-' ? 1 : 0) : list.length, 0, ...mine);
+      return Promise.resolve(ownPop.call(this, x, y, list, opts)).then((choice) => {
+        if (choice === 'nd-master') { setInMaster(ch, !inMaster(ch)); return null; }
+        return choice;
+      });
+    };
+  }
+  const moCss = document.createElement('style');
+  moCss.textContent = `
+    #nav-pane .nd-mo-tag { display: inline-block; margin-left: 8px; padding: 0 5px; border: 1px solid currentColor; border-radius: 3px;
+      font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.55; vertical-align: 1px; white-space: nowrap; }
+    #nav-pane .nav-item.nd-master-out .n-label { opacity: 0.75; }
+  `;
+  document.head.appendChild(moCss);
+  window.NeoPlusMaster = { inMaster, set: setInMaster, mark: markMasterOut }; // for tests
 
   // ------------------------------------------------------------ menu bridge
   window.neo.onMenu((msg) => {
