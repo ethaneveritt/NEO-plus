@@ -1,7 +1,11 @@
 const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('neo', {
+  platform: process.platform,
+  // macOS: the system dictionary panel for the selected word (#179)
+  lookUpText: () => ipcRenderer.invoke('app:lookUp'),
   neoPlus: (msg) => ipcRenderer.invoke('neo-plus', msg), // NEO+ hook
+
   readLibrary: () => ipcRenderer.invoke('library:read'),
   writeLibrary: (data) => ipcRenderer.invoke('library:write', data),
 
@@ -19,6 +23,10 @@ contextBridge.exposeInMainWorld('neo', {
 
   readAux: (bookId, name) => ipcRenderer.invoke('aux:read', bookId, name),
   writeAux: (bookId, name, html) => ipcRenderer.invoke('aux:write', bookId, name, html),
+  snapshotList: (bookId) => ipcRenderer.invoke('snapshot:list', bookId),
+  snapshotRead: (bookId, name, file) => ipcRenderer.invoke('snapshot:read', bookId, name, file),
+  snapshotWrite: (bookId, name, file, text) => ipcRenderer.invoke('snapshot:write', bookId, name, file, text),
+  snapshotRemove: (bookId, name) => ipcRenderer.invoke('snapshot:remove', bookId, name),
 
   readJSON: (bookId, name, fallback) => ipcRenderer.invoke('json:read', bookId, name, fallback),
   writeJSON: (bookId, name, data) => ipcRenderer.invoke('json:write', bookId, name, data),
