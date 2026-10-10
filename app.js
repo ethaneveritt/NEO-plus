@@ -1211,7 +1211,7 @@ function roman(n) {
   for (const [v, s] of r) while (n >= v) { out += s; n -= v; }
   return out;
 }
-const partLabel = (n) => t('Part {n}', { n: roman(n) });
+const partLabel = (n) => (window.NeoPlusParts ? window.NeoPlusParts.label(n) : t('Part {n}', { n: roman(n) })); // NEO+ hook: a book's own part labels (neo-plus/parts.js)
 
 // the name a bound book goes out under: the pen name that owns the shelf
 function shelfAuthorName(shelf) {

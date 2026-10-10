@@ -650,7 +650,7 @@ function deletedName(book) { return `${bookName(book)} Deleted Chapters`; }
 // or its name when it has none. A part's own page is n.0.
 function docName(e, counts) {
   if (e.kind === 'part') return `${e.section}.0: ${e.label || e.name}`;
-  const section = typeof e.section === 'number' ? e.section : 1;
+  const section = typeof e.section === 'number' || (typeof e.section === 'string' && e.section) ? e.section : 1;
   const key = 'section ' + section;
   const n = (counts.get(key) || 0) + 1;
   counts.set(key, n);

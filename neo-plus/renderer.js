@@ -223,6 +223,12 @@
     if (kind === 'part') {
       const ps = parasFromHtml(html);
       const titled = !!(ps[0] && !ps[0].sceneBreak && !isAttribution(ps[0]) && blocks[0] && blocks[0].k === 'p');
+      // a part with no label (Part Labels…): its title alone
+      if (window.NeoPlusParts && NeoPlusParts.unlabeled(chId)) {
+        if (!titled) return [];
+        partSkip.set(chId, 1);
+        return [DB.heading(blocks[0].text)];
+      }
       const label = chapterName(chId).toUpperCase();
       if (!titled) return [DB.heading(label)];
       partSkip.set(chId, 1);
@@ -256,7 +262,10 @@
     // number; after the last part's chapters (an epilogue, a note), the
     // number after it. A book without parts counts its chapters as part 1.
     const hasParts = book.chapterOrder.some((c) => chapterKind(c) === 'part');
+    // (a part's number is the one it shows: a second volume's first part can
+    // be Part IV; a part with no label takes the number before it, with "a")
     let section = 0, partsSeen = 0;
+    const P = window.NeoPlusParts;
     for (const chId of book.chapterOrder) {
       const kind = chapterKind(chId);
       if (kind === 'contents') continue;
@@ -272,13 +281,15 @@
       const name = heads.length ? heads.map((h) => h.text).join(' ') : (chapterHeading(chId) || chapterName(chId));
       if (kind === 'part') {
         part = chId;
-        section = ++partsSeen;
+        if (P && P.unlabeled(chId)) section = `${partsSeen}a`;
+        else section = partsSeen = (P && P.number(chId)) || partsSeen + 1;
+        const bare = !!(P && P.unlabeled(chId));
         // the folder and the contents line read "Part I: The Crossing"; the
         // part's page in the Master, "PART I:" over its title
-        const partName = partSkip.get(chId) ? `${chapterName(chId)}: ${all[0].text}` : chapterName(chId);
+        const partName = bare ? chapterName(chId) : partSkip.get(chId) ? `${chapterName(chId)}: ${all[0].text}` : chapterName(chId);
         parts.push({ partId: chId, name: partName });
         // in the contents, the part's title in italic: "Part I: *The Crossing*"
-        const partFrom = partSkip.get(chId) ? chapterName(chId).length + 2 : partName.length;
+        const partFrom = bare ? 0 : partSkip.get(chId) ? chapterName(chId).length + 2 : partName.length;
         toc.push(m({ k: 'p', text: partName, marks: tocMarks(partName, partFrom), ind: 'flush', sa: 12 }, partName));
         // the part's page, set like the title page: a little way down a new
         // page, "PART I:" 20 pt bold over its title, 14 pt italic
