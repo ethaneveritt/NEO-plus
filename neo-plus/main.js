@@ -461,6 +461,11 @@ async function handle(_e, msg) {
       startLibraryTimer();
       return msg.on ? syncLibrary({ loud: true }) : { ok: true };
     }
+    case 'fontState': {
+      const next = { open: !!msg.open, own: !!msg.own };
+      if (next.open !== fontState.open || next.own !== fontState.own) { fontState = next; rebuildMenu(); }
+      return { ok: true };
+    }
     case 'newVersion': return newVersion;
     case 'openNewVersion': {
       if (newVersion && /^https:\/\/github\.com\/ethaneveritt\//i.test(newVersion.url)) require('electron').shell.openExternal(newVersion.url);
@@ -571,6 +576,43 @@ function namingMenu(label, key, current) {
   };
 }
 
+// Format → Body Font and Drop Cap Style: while the open book keeps its own
+// (neo-plus/fonts.js), the choices go to the book, not to NEO's library-wide
+// setting. "Font and Drop Cap for This Book Only" turns that on and off.
+let fontState = { open: false, own: false };
+const DROPCAPS = [['Literary', 'literary'], ['Fantasy', 'fantasy'], ['Sci-Fi', 'scifi'], ['Off', 'none']];
+function bookFontsMenu(template) {
+  const format = template.find((m) => m && Array.isArray(m.submenu) && m.submenu.some((i) => i && i.label === t('Body Font')));
+  if (!format) return;
+  format.submenu = [...format.submenu];
+  const fontAt = format.submenu.findIndex((i) => i && i.label === t('Body Font'));
+  const capAt = format.submenu.findIndex((i) => i && i.label === t('Drop Cap Style'));
+  const redirect = (item, msg) => {
+    if (!item || typeof item.click !== 'function') return item;
+    const ownClick = item.click;
+    return { ...item, click: (...a) => (fontState.own ? sendToWindow({ type: 'nd-font', ...msg }) : ownClick(...a)) };
+  };
+  if (fontAt >= 0 && Array.isArray(format.submenu[fontAt].submenu)) {
+    const m = format.submenu[fontAt];
+    format.submenu[fontAt] = { ...m, submenu: m.submenu.map((i) => (i && i.type === 'radio' ? redirect(i, { key: 'body', value: i.label })
+      : i && i.label === t('Other Font…') ? redirect(i, { pick: true }) : i)) };
+  }
+  if (capAt >= 0 && Array.isArray(format.submenu[capAt].submenu)) {
+    const m = format.submenu[capAt];
+    format.submenu[capAt] = { ...m, submenu: m.submenu.map((i) => {
+      const hit = i && DROPCAPS.find(([label]) => t(label) === i.label);
+      return hit ? redirect(i, { key: 'dropcap', value: hit[1] }) : i;
+    }) };
+  }
+  const at = Math.max(fontAt, capAt);
+  if (at < 0) return;
+  format.submenu.splice(at + 1, 0, {
+    label: t('Font and Drop Cap for This Book Only'), type: 'checkbox', checked: fontState.own, enabled: fontState.open,
+    visible: format.submenu[at].visible !== false,
+    click: (item) => sendToWindow({ type: 'nd-font-own', on: !!item.checked })
+  });
+}
+
 // The Google Drive menu, before Help. `rebuild` is main.js's buildMenu, so
 // the menu can show what's connected after a change.
 function extendAppMenu(template, rebuild) {
@@ -630,6 +672,7 @@ function extendAppMenu(template, rebuild) {
   }
   const menu = { label: t('Google Drive'), submenu: items };
   const out = [...template];
+  try { bookFontsMenu(out); } catch (err) { logError('fonts menu', err); }
   try {
     const help0 = out.findIndex((m) => m && m.role === 'help' || (m && m.label === t('Help')));
     out.splice(help0 < 0 ? out.length : help0, 0, readAloudMenu());
