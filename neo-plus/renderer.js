@@ -473,7 +473,12 @@
   }
 
   // NEO+ (this build) in the window's title
-  if (document.title === 'NEO') document.title = 'NEO+';
+  const plusTitle = () => { if (/(^| — )NEO$/.test(document.title)) document.title = document.title.replace(/NEO$/, 'NEO+'); };
+  if (typeof window.showWindowTitle === 'function') {
+    const ownTitle = window.showWindowTitle;
+    window.showWindowTitle = function () { const r = ownTitle.apply(this, arguments); plusTitle(); return r; };
+  }
+  plusTitle();
   const shelfMark = document.querySelector('#shelf-header h1');
   if (shelfMark && shelfMark.textContent.trim() === 'NEO') shelfMark.textContent = 'NEO+';
 
