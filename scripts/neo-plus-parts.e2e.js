@@ -52,7 +52,7 @@ async function labels(partId, set) {
     bd.dispatchEvent(new Event('change'));
   })()`);
   const preview = await js(`[...document.querySelectorAll('.nd-pv div')].map((d) => d.textContent)`);
-  if (process.env.SHOT && set.mode === 'none') fs.writeFileSync(process.env.SHOT, (await wc.capturePage()).toPNG());
+  if (process.env.SHOT && set.mode === 'none' && false) fs.writeFileSync(process.env.SHOT, (await wc.capturePage()).toPNG());
   await js(`document.querySelector('.nd-parts .${set.reset ? 'm-reset' : 'm-ok'}').click()`);
   await tick(1200); // NEO saves book.json 0.8 s after a change
   return preview;
@@ -78,8 +78,20 @@ test('Part Labels…: “Level” and 1, 2, 3, everywhere the parts are named', 
 test('a part with no label is just its title, and the count carries on past it', async () => {
   await labels('p-3', { mode: 'none' });
   assert.deepEqual(await names(), ['Level 1', 'Level 2', 'The Harbor Town', 'Level 3']);
+  // its page: no line over the title (not "Untitled"); the pane: the title once
+  assert.equal(await js(`document.getElementById('ch-head-p-3').classList.contains('no-number')`), true);
+  assert.equal(await js(`getComputedStyle(document.querySelector('#ch-head-p-3 .ch-num')).display`), 'none');
+  assert.equal(await js(`!!document.querySelector('.nav-item[data-id="p-3"] .nav-peek')`), false);
+  assert.equal(await js(`!!document.querySelector('.nav-item[data-id="p-2"] .nav-peek')`), true, 'a labeled part keeps its title line');
   const toc = await js(`bookContents().filter((e) => e.type === 'part').map((e) => e.label)`);
   assert.deepEqual(toc, ['Level 1: The Crossing', 'Level 2: The Shoals', 'The Harbor Town', 'Level 3: The Lantern']);
+});
+
+test('the unlabeled part on screen', async () => {
+  if (!process.env.SHOT) return;
+  await js(`document.querySelector('.chapter[data-id="p-3"]').scrollIntoView()`);
+  await tick(400);
+  fs.writeFileSync(process.env.SHOT, (await wc.capturePage()).toPNG());
 });
 
 test('a starting number: the parts after it count up from there', async () => {

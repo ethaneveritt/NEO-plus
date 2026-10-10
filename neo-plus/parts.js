@@ -63,8 +63,14 @@
     return (w ? w + ' ' : '') + numeral(p.num, s);
   }
   function titleOf(chId, meta) {
-    if (meta === (typeof book !== 'undefined' ? book : null) && typeof partTitleOf === 'function') return partTitleOf(chId);
-    return '';
+    if (meta !== (typeof book !== 'undefined' ? book : null)) return '';
+    let title = typeof partTitleOf === 'function' ? partTitleOf(chId) : '';
+    // (while NEO draws the page, the part's text is in memory, not yet on it)
+    if (!title && typeof chapterHTML !== 'undefined' && chapterHTML[chId] && typeof parasFromHtml === 'function') {
+      const ps = parasFromHtml(chapterHTML[chId]);
+      if (ps[0] && !ps[0].sceneBreak && !(typeof isAttribution === 'function' && isAttribution(ps[0]))) title = ps[0].text;
+    }
+    return title;
   }
 
   // NEO's partLabel(n): the n-th part of the book being counted
@@ -107,6 +113,31 @@
       return out;
     };
   }
+  // A part with no label: on its page, no line above its title (NEO's own
+  // way for an unnumbered chapter); in the Chapters pane, its title once
+  // (NEO shows a part's name, then the start of its page beneath)
+  function tidyPage() {
+    if (typeof book === 'undefined' || !book || !settingsOf(book)) return;
+    for (const p of numbering(book)) {
+      const head = document.getElementById('ch-head-' + p.chId);
+      if (head) head.classList.toggle('no-number', p.num === null);
+    }
+  }
+  function tidyNav() {
+    if (typeof book === 'undefined' || !book || !settingsOf(book)) return;
+    for (const p of numbering(book)) {
+      if (p.num !== null) continue;
+      const item = document.querySelector(`.nav-item[data-id="${CSS.escape(p.chId)}"]`);
+      const peek = item && item.querySelector('.nav-peek');
+      if (peek) peek.remove();
+    }
+  }
+  for (const [name, after] of [['renderChapters', tidyPage], ['renderNav', tidyNav]]) {
+    const fn = window[name];
+    if (typeof fn !== 'function') continue;
+    window[name] = function () { const r = fn.apply(this, arguments); try { after(); } catch (err) { /* only looks */ } return r; };
+  }
+
   // the outline's and board's part lines read "Part I: Title": an unlabeled
   // part, just its title
   for (const name of ['outlinePartLine', 'boardPartRow']) {
