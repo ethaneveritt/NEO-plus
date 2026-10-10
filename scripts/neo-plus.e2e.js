@@ -109,6 +109,7 @@ test('a cover image of your own can carry the title, subtitle and author, in a s
   const bookId = await js('book.id');
   const png = await js(`(() => { const c = document.createElement('canvas'); c.width = 400; c.height = 600; const x = c.getContext('2d');
     const g = x.createLinearGradient(0, 0, 0, 600); g.addColorStop(0, '#203a5a'); g.addColorStop(1, '#c97b3a'); x.fillStyle = g; x.fillRect(0, 0, 400, 600);
+    for (let i = 0; i < 600; i += 12) { x.fillStyle = i % 24 ? '#f2efe6' : '#111'; x.fillRect(0, i, 400, 6); } // busy: NEO would box the author
     return c.toDataURL('image/png').split(',')[1]; })()`);
   const dir = fs.readdirSync(LIB).find((n) => n.startsWith('book-'));
   fs.writeFileSync(path.join(LIB, dir, 'cover-1700000000.png'), Buffer.from(png, 'base64'));
@@ -127,6 +128,9 @@ test('a cover image of your own can carry the title, subtitle and author, in a s
   assert.equal(await js(`${tile}.classList.contains('has-cover')`), false);
   assert.match(await js(`${tile}.querySelector('.b-title').textContent`), /Lighthouse.*Book One/is);
   assert.equal(await js(`getComputedStyle(${tile}.querySelector('.b-text')).display`) !== 'none', true);
+  // no box behind the author's name
+  assert.equal(await js(`${tile}.classList.contains('cv-au-scrim')`), false);
+  assert.equal(await js(`getComputedStyle(${tile}.querySelector('.b-author')).backgroundColor`), 'rgba(0, 0, 0, 0)');
   const tpl = () => js(`[...${tile}.classList].find((c) => c.startsWith('cv-') && !/light|dark|scrim|au-|painting/.test(c))`);
   const first = await tpl();
   if (process.env.SHOT) fs.writeFileSync(process.env.SHOT.replace(/\.png$/, '-cover.png'), (await wc.capturePage()).toPNG());

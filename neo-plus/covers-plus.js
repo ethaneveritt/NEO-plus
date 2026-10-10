@@ -42,6 +42,7 @@
   }
 
   window.dressTile = function (el, meta) {
+    if (el && el.classList) el.classList.remove('nd-au-free');
     if (!wantsType(meta)) return own.dressTile.apply(this, arguments);
     el.classList.remove('has-cover');
     const token = (el._dressToken = (el._dressToken || 0) + 1);
@@ -51,6 +52,9 @@
       if (el._dressToken !== token) return;
       if (!a) { own.dressTile(el, meta); return; }
       NeoCovers.dress(el, NeoCovers.plan(styled(meta), a));
+      // no box behind the author's name: a soft shadow keeps it readable
+      el.classList.remove('cv-au-scrim');
+      el.classList.add('nd-au-free');
       addSubtitle(el, meta);
     });
     return undefined;
@@ -104,7 +108,7 @@
         if (!c) return own.exportCover.apply(this, arguments);
         const img = await new Promise((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = `data:${c.mime};base64,${c.base64}`; });
         await NeoCovers.ready;
-        const url = NeoCovers.renderFull(styled({ ...d, title: meta.title || d.title, author: meta.author || d.author, ndTypeSeed: meta.ndTypeSeed }), { image: img }).toDataURL('image/jpeg', 0.92);
+        const url = NeoCovers.renderFull(styled({ ...d, title: meta.title || d.title, author: meta.author || d.author, ndTypeSeed: meta.ndTypeSeed, noAuthorPlate: true }), { image: img }).toDataURL('image/jpeg', 0.92);
         return { base64: url.split(',')[1], mime: 'image/jpeg', ext: 'jpg' };
       } catch (err) {
         window.neo.logError('NEO+ cover type: ' + err);
@@ -112,6 +116,14 @@
       }
     };
   }
+
+  const css = document.createElement('style');
+  css.textContent = `
+    .book.nd-au-free .b-author { background: none !important; padding: 0; }
+    .book.nd-au-free.cv-au-light .b-author { text-shadow: 0 1px 2px rgba(0,0,0,0.85), 0 0 8px rgba(0,0,0,0.6); }
+    .book.nd-au-free.cv-au-dark .b-author { text-shadow: 0 1px 2px rgba(255,255,255,0.8), 0 0 8px rgba(255,255,255,0.5); }
+  `;
+  document.head.appendChild(css);
 
   window.NeoPlusCovers = { wantsType };
 })();

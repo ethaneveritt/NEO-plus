@@ -571,11 +571,11 @@ const NeoCovers = (() => {
         aw = ctx.measureText(author).width;
       }
       const ay = t.anchor === 'top' ? TILE_H - 9 - AU : y + AU_GAP;
-      if (planned.authorInk.scrim && !t.band) {
+      if (planned.authorInk.scrim && !t.band && !meta.noAuthorPlate) { // NEO+ hook: noAuthorPlate (neo-plus/covers-plus.js)
         ctx.fillStyle = planned.authorInk.light ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)';
         const px = left ? PAD : TILE_W / 2 - aw / 2;
         ctx.fillRect(px - 6, ay - 3, aw + 12, AU + 6);
-      }
+      } else if (meta.noAuthorPlate && !t.band) { ctx.shadowColor = planned.authorInk.light ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.5)'; ctx.shadowBlur = 6 * s; ctx.shadowOffsetY = 1 * s; } // NEO+ hook: a shadow in its place
       ctx.fillStyle = t.band ? ink : auInk;
       ctx.globalAlpha = t.band ? 0.9 : 0.9;
       ctx.fillText(author, x, ay);
