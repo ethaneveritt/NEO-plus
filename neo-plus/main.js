@@ -42,6 +42,7 @@ function extendTextMenu(items, params, win) {
   }
   const tail = [
     { type: 'separator' },
+    { label: t('Set-Apart Line (like “TWO WEEKS LATER”)'), click: () => send({ type: 'nd-setapart', x: params.x, y: params.y, sel: !!(params.selectionText && params.selectionText.trim()) }) },
     { label: t('Fix Quotes in This Chapter'), click: () => send({ type: 'nd-fixApostrophes', x: params.x, y: params.y }) }
   ];
   return [...extra, ...items, ...tail];
@@ -604,7 +605,14 @@ function bookFontsMenu(template) {
       return hit ? redirect(i, { key: 'dropcap', value: hit[1] }) : i;
     }) };
   }
-  const at = Math.max(fontAt, capAt);
+  const alignAt = format.submenu.findIndex((i) => i && i.label === t('Align Paragraph'));
+  if (alignAt >= 0) {
+    format.submenu.splice(alignAt + 1, 0, {
+      label: t('Set-Apart Line (like “TWO WEEKS LATER”)'), visible: format.submenu[alignAt].visible !== false,
+      click: () => sendToWindow({ type: 'nd-setapart' })
+    });
+  }
+  const at = Math.max(format.submenu.findIndex((i) => i && i.label === t('Body Font')), format.submenu.findIndex((i) => i && i.label === t('Drop Cap Style')));
   if (at < 0) return;
   format.submenu.splice(at + 1, 0, {
     label: t('Font and Drop Cap for This Book Only'), type: 'checkbox', checked: fontState.own, enabled: fontState.open,

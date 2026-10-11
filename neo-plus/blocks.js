@@ -108,12 +108,18 @@
       if (f && t) marks.push([text.length, text.length + t.length, f]);
       text += t;
     }
+    // a set-apart line ("TWO WEEKS LATER", neo-plus/setapart.js): centered,
+    // bold, 14 pt — which is also how it's known when it comes back
+    if (p.banner) return normalize({ k: 'p', text, marks: [...marks, [0, text.length, 'b']], align: 'center', ind: 'flush', sz: BANNER_SIZE });
     return normalize({
       k: 'p', text, marks,
       align: p.align || 'left',
       ind: p.poetry ? 'poetry' : p.flush ? 'flush' : 'normal'
     });
   }
+  const BANNER_SIZE = 14;
+  const isBanner = (b) => b.k === 'p' && b.align === 'center' && b.sz === BANNER_SIZE && b.text.length > 0 &&
+    b.marks.length > 0 && b.marks.every((m) => m[2].includes('b')) && b.marks.reduce((n, m) => n + (m[1] - m[0]), 0) >= b.text.length;
 
   // ----------------------------------------------------------- from Docs
   // A Doc (documents.get, suggestionsViewMode SUGGESTIONS_INLINE) as its
@@ -339,6 +345,10 @@
   function toNeoHtml(b) {
     b = normalize(b);
     if (b.k === 'brk') return '<p class="scene-break">***</p>';
+    if (isBanner(b)) {
+      const inner = toNeoHtml({ ...b, sz: SIZE, align: 'left', ind: 'flush', marks: b.marks.map(([s0, e0, f]) => [s0, e0, f.replace('b', '')]).filter((m) => m[2]) });
+      return inner.replace(/^<p[^>]*>/, `<p class="poetry nd-banner">`);
+    }
     const per = new Array(b.text.length).fill('');
     for (const [s, e, f] of b.marks) for (let i = s; i < e; i++) per[i] = f;
     let html = '';

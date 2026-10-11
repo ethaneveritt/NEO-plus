@@ -194,3 +194,11 @@ test('a heading whose words change takes the whole look again', async () => {
   const hd = (await g.getDoc(id)).body.content.find((e) => e.paragraph).paragraph.paragraphStyle;
   assert.deepStrictEqual([hd.spaceAbove.magnitude, hd.spaceBelow.magnitude, hd.lineSpacing], [0, 0, 200]);
 });
+
+test('a set-apart line goes to a Doc centered, bold and 14 pt, and comes back as one', () => {
+  const b = B.fromNeoPara({ poetry: true, align: 'center', banner: true, runs: [{ text: 'THE NEXT MORNING', b: true }] });
+  assert.deepEqual([b.align, b.ind, b.sz, b.marks], ['center', 'flush', 14, [[0, 16, 'b']]]);
+  assert.equal(B.toNeoHtml(b), '<p class="poetry nd-banner">THE NEXT MORNING</p>');
+  // a centered bold line at the usual size stays an ordinary centered line
+  assert.equal(B.toNeoHtml(B.fromNeoPara({ align: 'center', runs: [{ text: 'Low Tide', b: true }] })), '<p style="text-align:center"><b>Low Tide</b></p>');
+});
