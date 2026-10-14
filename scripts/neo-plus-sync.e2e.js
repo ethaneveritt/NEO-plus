@@ -523,6 +523,28 @@ test('View → Show “What happens here…” in the Chapters Pane: off hides t
   await js(`book.chapterNotes[${JSON.stringify(first)}] = ''; renderNav();`);
 });
 
+test('in the Master, an epigraph page after the last chapter starts a page of its own', async () => {
+  await js(`(async () => {
+    const id = 'ch-epigraph-test';
+    book.chapterOrder.push(id);
+    book.chapterKinds = book.chapterKinds || {}; book.chapterKinds[id] = 'epigraph';
+    chapterHTML[id] = '<p>The sea keeps what it is given.</p>';
+    await persistChapter(id, chapterHTML[id]);
+    await saveMeta();
+    renderChapters();
+  })()`);
+  await tick(400);
+  await sync();
+  const m = await fake({ do: 'doc', id: (await master()).id });
+  const para = m.body.content.filter((e) => e.paragraph).find((e) => e.paragraph.elements.map((x) => x.textRun.content).join('').startsWith('The sea keeps'));
+  assert.ok(para, 'the epigraph is in the Master');
+  assert.equal(para.paragraph.paragraphStyle.pageBreakBefore, true);
+  assert.ok(para.paragraph.paragraphStyle.spaceAbove.magnitude >= 144);
+  await js(`(async () => { book.chapterOrder = book.chapterOrder.filter((c) => c !== 'ch-epigraph-test'); await saveMeta(); renderChapters(); })()`);
+  await tick(300);
+  await sync();
+});
+
 test('a chapter deleted in NEO goes to "Deleted chapters" in Drive', async () => {
   const order = await chIds();
   const last = order[order.length - 1];

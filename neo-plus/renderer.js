@@ -314,7 +314,10 @@
       }
       // each chapter starts a new page
       heads.forEach((h, i) => body.push(m(i ? h : { ...h, pb: true }, name)));
-      for (const b of blocks) body.push(m(b, name));
+      // so does a page with no heading of its own (an epigraph, a dedication,
+      // the copyright page), a little way down it as NEO's exports set them
+      const ownPage = !heads.length && kind !== 'chapter' && kind !== 'unnumbered';
+      blocks.forEach((b, i) => body.push(m(i === 0 && (ownPage || !heads.length) ? { ...b, pb: true, ...(ownPage ? { sa: Math.max(b.sa || 0, 144) } : {}) } : b, name)));
     }
     // the title page, as NEO's export sets it: title, subtitle, author
     const master = [m({ ...DB.heading(book.title || t('Untitled')), sz: 20, sa: 150, ls: 100 })];
