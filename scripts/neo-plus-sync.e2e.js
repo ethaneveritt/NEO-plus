@@ -540,6 +540,14 @@ test('in the Master, an epigraph page after the last chapter starts a page of it
   assert.ok(para, 'the epigraph is in the Master');
   assert.equal(para.paragraph.paragraphStyle.pageBreakBefore, true);
   assert.ok(para.paragraph.paragraphStyle.spaceAbove.magnitude >= 144);
+  // set as NEO shows it: centered, in italic (no "Epigraph" heading)
+  assert.equal(para.paragraph.paragraphStyle.alignment, 'CENTER');
+  assert.equal(para.paragraph.elements[0].textRun.textStyle.italic, true);
+  const all = m.body.content.filter((e) => e.paragraph).map((e) => e.paragraph.elements.map((x) => x.textRun.content).join(''));
+  assert.ok(!all.some((t) => /^Epigraph\n/i.test(t)));
+  // its own Doc keeps the words as written
+  const own = (await files()).find((f) => f.appProperties.neoChapter === 'ch-epigraph-test');
+  if (own) assert.equal((await fake({ do: 'doc', id: own.id })).body.content.filter((e) => e.paragraph).some((e) => e.paragraph.elements.some((x) => x.textRun.textStyle.italic)), false);
   await js(`(async () => { book.chapterOrder = book.chapterOrder.filter((c) => c !== 'ch-epigraph-test'); await saveMeta(); renderChapters(); })()`);
   await tick(300);
   await sync();

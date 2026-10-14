@@ -316,8 +316,22 @@
       heads.forEach((h, i) => body.push(m(i ? h : { ...h, pb: true }, name)));
       // so does a page with no heading of its own (an epigraph, a dedication,
       // the copyright page), a little way down it as NEO's exports set them
+      // and in the Master it's set the way NEO shows it (the chapter's own
+      // Doc keeps the words as written): an epigraph or a dedication centered
+      // and in italic, the copyright page small
       const ownPage = !heads.length && kind !== 'chapter' && kind !== 'unnumbered';
-      blocks.forEach((b, i) => body.push(m(i === 0 && (ownPage || !heads.length) ? { ...b, pb: true, ...(ownPage ? { sa: Math.max(b.sa || 0, 144) } : {}) } : b, name)));
+      const look = (b) => {
+        if (b.k !== 'p') return b;
+        if (kind === 'epigraph' || kind === 'dedication') {
+          return { ...b, align: b.align === 'left' || b.align === 'justify' ? 'center' : b.align, ind: 'flush', marks: [...(b.marks || []), [0, b.text.length, 'i']], sb: 12 };
+        }
+        if (kind === 'copyright') return { ...b, ind: 'flush', sz: 10, ls: 115, sb: 8 };
+        return b;
+      };
+      blocks.forEach((b, i) => {
+        const set = ownPage ? look(b) : b;
+        body.push(m(i === 0 && (ownPage || !heads.length) ? { ...set, pb: true, ...(ownPage ? { sa: Math.max(set.sa || 0, 144) } : {}) } : set, name));
+      });
     }
     // the title page, as NEO's export sets it: title, subtitle, author
     const master = [m({ ...DB.heading(book.title || t('Untitled')), sz: 20, sa: 150, ls: 100 })];
