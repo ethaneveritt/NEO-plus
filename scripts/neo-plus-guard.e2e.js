@@ -41,13 +41,33 @@ const texts = (i) => js(`[...document.querySelectorAll('.chapter-body')[${i}].qu
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('Enter twice still makes a *** break; a third Enter doesn’t make a chapter', async () => {
+test('Enter twice: a blank line; three times: a *** break; never a new chapter', async () => {
   await caret(0, 0, true);
   await key('Enter'); await key('Enter');
-  assert.ok((await texts(0)).includes('***'), JSON.stringify(await texts(0)));
+  assert.deepEqual(await texts(0), ['The lamp was lit.', '', '']);
+  await js(`document.querySelector('.chapter-body').dispatchEvent(new InputEvent('input', { inputType: 'insertText', data: 'D', bubbles: true }))`);
+  await key('Enter');
+  assert.deepEqual(await texts(0), ['The lamp was lit.', '***', ''], 'the third makes the blank line a ***');
   await key('Enter');
   assert.equal(await count(), 2);
-  assert.ok((await texts(0)).includes('***'), 'the *** stays');
+  assert.deepEqual(await texts(0), ['The lamp was lit.', '***', ''], 'a fourth does nothing more');
+});
+
+test('mid-sentence: Enter splits, a second makes a blank line, a third a ***', async () => {
+  await js(`(() => { const body = document.querySelectorAll('.chapter-body')[0]; body.innerHTML = '<p>Dear Tom, the letter began.</p>'; syncChapter(body, book.chapterOrder[0]); })()`);
+  await js(`(() => { const body = document.querySelectorAll('.chapter-body')[0]; body.focus(); const t = body.querySelector('p').firstChild; const r = document.createRange(); r.setStart(t, 9); r.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+  await key('Enter');
+  assert.deepEqual(await texts(0), ['Dear Tom,', ' the letter began.']);
+  await key('Enter');
+  assert.deepEqual(await texts(0), ['Dear Tom,', '', ' the letter began.']);
+  await key('Enter');
+  assert.deepEqual(await texts(0), ['Dear Tom,', '***', ' the letter began.']);
+});
+
+test('a blank line is kept in exports, as a line of its own', async () => {
+  await js(`(() => { const body = document.querySelectorAll('.chapter-body')[0]; body.innerHTML = '<p>Dear Tom,</p><p><br></p><p>The tide came in early.</p><p><br></p><p><br></p><p>Yours,</p><p><br></p>'; syncChapter(body, book.chapterOrder[0]); })()`);
+  const paras = await js(`exportChapters().sections.find((s) => s.kind === 'chapter').paras.map((p) => p.blank ? '' : p.text)`);
+  assert.deepEqual(paras, ['Dear Tom,', '', 'The tide came in early.', '', 'Yours,']);
 });
 
 test('Backspace at the start of a chapter doesn’t merge it into the one above', async () => {
@@ -68,14 +88,14 @@ test('Backspace in an empty chapter leaves it', async () => {
 test('the hint under a new book no longer says three times = new chapter', async () => {
   await js(`toast(t('Enter twice = section break · three times = new chapter · {key} shows everything else', { key: KHELP }))`);
   const hint = await js(`document.getElementById('hint').textContent`);
-  assert.doesNotMatch(hint, /three times/);
-  assert.match(hint, /\+ Chapter/);
+  assert.match(hint, /Enter twice = a blank line · three times = section break/);
 });
 
 test('the help sheet no longer lists Enter three times', async () => {
   const rows = await js(`bookShortcutSections().flatMap((s) => s.rows.map((r) => r[1]))`);
   assert.ok(!rows.includes('Start a new chapter'));
   assert.ok(rows.includes('Insert a section break'));
+  assert.ok(rows.includes('A blank line'));
 });
 
 async function main() {

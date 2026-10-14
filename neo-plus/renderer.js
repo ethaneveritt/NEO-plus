@@ -192,10 +192,12 @@
     const list = [];
     for (const p of holder.querySelectorAll('p')) {
       if (skip.has(p)) continue;
+      // a blank line: an empty paragraph in the Doc too
+      if (window.NeoPlusBlanks && NeoPlusBlanks.isBlank(p)) { list.push({ el: p, block: DB.fromNeoPara({ runs: [] }) }); continue; }
       const paras = parasFromHtml(p.outerHTML);
       if (paras.length) list.push({ el: p, block: DB.fromNeoPara(paras[0]) });
     }
-    return { holder, list };
+    return { holder, list: DB.tidyBlanks(list, (x) => x.block) };
   }
   function blocksOf(html) {
     let b = paraCache.get(html);

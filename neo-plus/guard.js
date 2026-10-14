@@ -5,7 +5,8 @@
 // the third splits the chapter there), and Backspace at the start of a
 // chapter takes it away: an empty chapter vanishes, and one with words
 // merges into the chapter above. Here:
-//   - Enter twice still makes a *** break; a third Enter does nothing more.
+//   - Enter twice is a blank line, three times a *** break (handleEnter
+//     below); never a new chapter.
 //   - Backspace at the very start of a chapter does nothing, and Backspace in
 //     an empty chapter leaves it (it says once where Delete is).
 // Backspace still removes an empty line or a *** inside a chapter, as before.
@@ -25,6 +26,63 @@
       syncChapter(body, chId);
       if (typeof resetNativeUndo === 'function') resetNativeUndo();
       return undefined;
+    };
+  }
+
+  // Enter's rhythm in a story: once, a new paragraph; twice, a blank line
+  // (kept as a blank line everywhere: exports and the Google Docs too);
+  // three times, the blank line becomes a *** break. (NEO: twice is ***,
+  // three times a new chapter.) Mid-sentence it works the same, from the
+  // second press on.
+  if (has('handleEnter')) {
+    const ownEnter = window.handleEnter;
+    window.handleEnter = function (e, body, chId) {
+      if (e.key !== 'Enter' || e.shiftKey) return ownEnter.apply(this, arguments);
+      const sel = window.getSelection();
+      if (!sel.rangeCount || !sel.isCollapsed) return ownEnter.apply(this, arguments);
+      let el = sel.anchorNode;
+      if (el && el.nodeType === Node.TEXT_NODE) el = el.parentElement;
+      const block = el && el.closest ? el.closest('p') : null;
+      if (!block || !body.contains(block) || !isStory(chId) ||
+        block.classList.contains('poetry') || block.classList.contains('flush') || block.classList.contains('scene-break')) return ownEnter.apply(this, arguments);
+      // only at the start of a line (an empty one, or the words a press
+      // before pushed down); anywhere else Enter is NEO's own
+      let atStart = block.textContent.trim() === '';
+      if (!atStart) {
+        const pre = document.createRange();
+        pre.selectNodeContents(block);
+        try { pre.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset); } catch { return ownEnter.apply(this, arguments); }
+        atStart = pre.toString().length === 0;
+      }
+      if (!atStart) return ownEnter.apply(this, arguments);
+      const prev = block.previousElementSibling;
+      const prevBlank = !!(prev && prev.tagName === 'P' && !prev.classList.contains('scene-break') && !prev.classList.contains('ghost') &&
+        !prev.classList.contains('poetry') && prev.textContent.trim() === '' && !prev.querySelector('.ph-mark'));
+      const run = typeof enterRun === 'number' ? enterRun : 1;
+      e.preventDefault();
+      if (run >= 3 && prev && prev.classList.contains('scene-break')) return true; // a fourth: nothing more
+      if (run >= 3 && prevBlank) {
+        // the third Enter: the blank line above becomes ***
+        snapshotStructure('section break', { rejoin: true });
+        prev.removeAttribute('style');
+        prev.className = 'scene-break';
+        prev.textContent = '***';
+        if (typeof placeCaret === 'function') placeCaret(block, 0);
+        syncChapter(body, chId);
+        if (typeof resetNativeUndo === 'function') resetNativeUndo();
+        if (typeof typewriterEnabled !== 'undefined' && !typewriterEnabled && typeof revealCaret === 'function') revealCaret();
+        if (typeof breakRun !== 'undefined') breakRun++;
+        return true;
+      }
+      // the second Enter (or any Enter at the start of a line): a blank line
+      if (block.querySelector('span:not(.ph-mark)') && typeof stripJunkSpans === 'function') {
+        const caret = captureCaret();
+        stripJunkSpans(block);
+        restoreCaret(caret);
+      }
+      document.execCommand('insertParagraph');
+      syncChapter(body, chId);
+      return true;
     };
   }
 
@@ -72,7 +130,7 @@
     const ownToast = window.toast;
     window.toast = function (msg) {
       if (typeof KHELP !== 'undefined' && msg === t('Enter twice = section break · three times = new chapter · {key} shows everything else', { key: KHELP })) {
-        arguments[0] = t('Enter twice = section break · + Chapter in the Chapters pane adds a chapter · {key} shows everything else', { key: KHELP });
+        arguments[0] = t('Enter twice = a blank line · three times = section break · {key} shows everything else', { key: KHELP });
       }
       return ownToast.apply(this, arguments);
     };
@@ -82,7 +140,13 @@
     window.bookShortcutSections = function () {
       const out = ownSections.apply(this, arguments);
       const gone = tk('Start a new chapter');
-      for (const s of out || []) if (Array.isArray(s.rows)) s.rows = s.rows.filter((row) => row[1] !== gone);
+      const brk = tk('Insert a section break');
+      for (const s of out || []) {
+        if (!Array.isArray(s.rows)) continue;
+        s.rows = s.rows.filter((row) => row[1] !== gone);
+        const at = s.rows.findIndex((row) => row[1] === brk);
+        if (at >= 0) s.rows.splice(at, 1, [tk('Enter ×2'), t('A blank line')], [tk('Enter ×3'), brk]);
+      }
       return out;
     };
   }

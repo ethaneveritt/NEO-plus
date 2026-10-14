@@ -252,7 +252,7 @@ class Sync {
     const base = c.base;
     const localChanged = !base || !sameKeys(want, base);
     const doc = await this.api.getDoc(c.docId);
-    const remote = B.fromDoc(doc);
+    const remote = docBlocks(doc);
     const remoteChanged = !base || !sameKeys(remote, base);
     if (base && !remoteChanged && !localChanged) { c.version = lv ? lv.version : c.version; return; }
 
@@ -527,7 +527,7 @@ class Sync {
     if (!localChanged && !remoteMaybe) return;
 
     const doc = await this.api.getDoc(st.masterId);
-    const remote = B.fromDoc(doc);
+    const remote = docBlocks(doc);
     const undone = [];
     if (st.masterBase && !sameKeys(remote, st.masterBase)) {
       // someone typed in the reading copy: it is put back below, and a
@@ -625,6 +625,12 @@ function readChapterNotes(blocks, labels) {
   const out = {};
   for (const [k, v] of Object.entries(lines)) out[k] = trimGaps(v.map((x) => x.trim())).join('\n');
   return out;
+}
+
+// A chapter's or the Master's paragraphs, a blank line kept as one (an
+// empty paragraph); none at the very start or end, as NEO leaves none there.
+function docBlocks(doc) {
+  return B.tidyBlanks(B.fromDoc(doc, { keepEmpty: true }));
 }
 
 // a list without the blank lines at its start and end

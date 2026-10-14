@@ -109,6 +109,23 @@ test('typing in NEO reaches the chapter Doc and the Master', async () => {
   assert.match(await fake({ do: 'text', id: (await master()).id }), /harbor\. Again\./);
 });
 
+test('a blank line between paragraphs reaches the chapter Doc and the Master as a blank line, and stays', async () => {
+  const [, c2] = await chIds();
+  await js(`(() => { const body = document.querySelector('.chapter[data-id="${c2}"] .chapter-body'); body.innerHTML = '<p>Dear Tom,</p><p><br></p><p>The house was cold.</p>'; syncChapter(body, '${c2}'); })()`);
+  await js('flushAllSaves()'); await tick(400);
+  await sync();
+  assert.match(await fake({ do: 'text', id: (await docFor(c2)).id }), /Dear Tom,\n\nThe house was cold\.\n/);
+  assert.match(await fake({ do: 'text', id: (await master()).id }), /Dear Tom,\n\nThe house was cold\.\n/);
+  // a second sync changes nothing, and NEO keeps its blank line
+  await sync(); await sync();
+  assert.deepEqual(await js(`[...document.querySelector('.chapter[data-id="${c2}"] .chapter-body').querySelectorAll('p')].map((p) => p.textContent)`), ['Dear Tom,', '', 'The house was cold.']);
+  assert.match(await fake({ do: 'text', id: (await docFor(c2)).id }), /Dear Tom,\n\nThe house was cold\.\n/);
+  // (back as it was, for the tests after this one)
+  await js(`(() => { const body = document.querySelector('.chapter[data-id="${c2}"] .chapter-body'); body.innerHTML = '<p>The house was cold.</p>'; syncChapter(body, '${c2}'); })()`);
+  await js('flushAllSaves()'); await tick(400);
+  await sync();
+});
+
 test('a chapter left out of the Master: its own Doc still updates, the Master goes without it', async () => {
   const [, , c3] = await chIds();
   // right-click it in the Chapters pane → In the Master Manuscript (ticked: untick it)

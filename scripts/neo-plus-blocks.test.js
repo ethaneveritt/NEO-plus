@@ -202,3 +202,11 @@ test('a set-apart line goes to a Doc centered, bold and 14 pt, and comes back as
   // a centered bold line at the usual size stays an ordinary centered line
   assert.equal(B.toNeoHtml(B.fromNeoPara({ align: 'center', runs: [{ text: 'Low Tide', b: true }] })), '<p style="text-align:center"><b>Low Tide</b></p>');
 });
+
+test('blank lines: kept between paragraphs, none at the ends, none beside a ***, one for several', () => {
+  const p = (text) => B.normalize({ k: 'p', text });
+  const brk = B.normalize({ k: 'brk' });
+  const got = B.tidyBlanks([p(''), p('Dear Tom,'), p(''), p(''), p('The tide came in early.'), p(''), brk, p(''), p('Yours,'), p('')]);
+  assert.deepEqual(got.map((b) => (b.k === 'brk' ? '***' : b.text)), ['Dear Tom,', '', 'The tide came in early.', '***', 'Yours,']);
+  assert.equal(B.toNeoHtml(p('')), '<p><br></p>');
+});

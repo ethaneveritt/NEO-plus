@@ -117,6 +117,21 @@
       ind: p.poetry ? 'poetry' : p.flush ? 'flush' : 'normal'
     });
   }
+  // Blank lines (empty paragraphs) as a book keeps them: none at the start
+  // or end, none beside a *** (the break is the space there), and one where
+  // there were several. get(x): the block of a list item.
+  function tidyBlanks(list, get = (x) => x) {
+    const blank = (x) => { const b = x && get(x); return !!b && b.k === 'p' && b.text === ''; };
+    const brk = (x) => { const b = x && get(x); return !!b && b.k === 'brk'; };
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const x = list[i];
+      if (blank(x) && (!out.length || blank(out[out.length - 1]) || brk(out[out.length - 1]) || brk(list[i + 1]))) continue;
+      out.push(x);
+    }
+    while (out.length && blank(out[out.length - 1])) out.pop();
+    return out;
+  }
   const BANNER_SIZE = 14;
   const isBanner = (b) => b.k === 'p' && b.align === 'center' && b.sz === BANNER_SIZE && b.text.length > 0 &&
     b.marks.length > 0 && b.marks.every((m) => m[2].includes('b')) && b.marks.reduce((n, m) => n + (m[1] - m[0]), 0) >= b.text.length;
@@ -274,7 +289,8 @@
   // last paragraph, no edit ever has to.
   function editRequests(doc, want, profile) {
     want = want.map(normalize);
-    const rd = readDoc(doc, { keepEmpty: profile === 'notes' });
+    // a blank line is a paragraph too (an empty one), in every Doc
+    const rd = readDoc(doc, { keepEmpty: true });
     const requests = [];
     const lastPara = rd.paras[rd.paras.length - 1];
     if (!lastPara || lastPara.text !== '') {
@@ -382,7 +398,7 @@
 
   const api = {
     normalize, blockKey, sameBlock, isHeading, heading, fromNeoPara, readDoc, fromDoc, diffBlocks,
-    editRequests, fillRequests, toNeoHtml, plain, BREAK_TEXT
+    editRequests, fillRequests, toNeoHtml, plain, tidyBlanks, BREAK_TEXT
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.NeoPlusBlocks = api;
