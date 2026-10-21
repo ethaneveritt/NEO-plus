@@ -142,6 +142,53 @@ test('a cover image of your own can carry the title, subtitle and author, in a s
   // the exported cover (EPUB, PDF) carries the type too
   const ex = await js(`exportCover({ id: '${bookId}', coverImage: 'cover-1700000000.png', title: 'The Lighthouse', author: 'Test Writer' }).then((c) => c.mime)`);
   assert.equal(ex, 'image/jpeg');
+  // ↻ → Adjust the title…: another lettering, smaller, lower
+  const sizeOf = () => js(`parseFloat(${tile}.querySelector('.b-title .b-line').style.fontSize)`);
+  const before = await sizeOf();
+  await js(`${tile}.querySelector('.b-refresh').click()`);
+  await pickChoice('Adjust the title');
+  assert.equal(await js(`!!document.querySelector('.nd-adjust .nd-adj-preview .book')`), true, 'a preview');
+  const face = (await tpl()) === 'cv-cinzel' ? 'fat' : 'cinzel';
+  await js(`document.querySelector('.nd-adjust [data-face="${face}"]').click()`);
+  await js(`(() => { const r = document.querySelector('.nd-adjust .nd-sz'); r.value = 70; r.dispatchEvent(new Event('input')); })()`);
+  await js(`document.querySelector('.nd-adjust [data-anchor="bottom"]').click()`);
+  await js(`(() => { const r = document.querySelector('.nd-adjust .nd-sh'); r.value = -8; r.dispatchEvent(new Event('input')); })()`);
+  await tick(300);
+  assert.equal(await tpl(), 'cv-' + face, 'the lettering chosen, on the tile as it changes');
+  if (process.env.SHOT) fs.writeFileSync(process.env.SHOT.replace(/\.png$/, '-adjust.png'), (await wc.capturePage()).toPNG());
+  await js(`document.querySelector('.nd-adjust .m-ok').click()`);
+  await tick(1200);
+  assert.equal(await js(`!!document.querySelector('.nd-adjust')`), false);
+  assert.equal(await js(`${tile}.classList.contains('nd-at-bottom')`), true);
+  const b = await js(`(() => { const r = ${tile}.getBoundingClientRect(), t = ${tile}.querySelector('.b-text').getBoundingClientRect(); return { tile: r.bottom, text: t.bottom, top: t.top - r.top, h: r.height }; })()`);
+  assert.ok(Math.abs(b.tile - b.text - 18) < 3, 'the title at the foot, 8 px up: ' + JSON.stringify(b));
+  const adj = JSON.parse(fs.readFileSync(path.join(LIB, dir, 'book.json'), 'utf8'));
+  assert.equal(adj.ndTypeScale, 0.7);
+  assert.equal(adj.ndTypeAnchor, 'bottom');
+  assert.equal(adj.ndTypeShift, -8);
+  // the shelf, drawn afresh, keeps it all
+  await js(`(async () => { await openBook('${bookId}'); await backToShelf(); })()`);
+  await tick(1200);
+  assert.equal(await tpl(), 'cv-' + face);
+  assert.equal(await js(`${tile}.classList.contains('nd-at-bottom')`), true);
+  // and the export carries it
+  const ex2 = await js(`exportCover({ id: '${bookId}', coverImage: 'cover-1700000000.png', title: 'The Lighthouse', author: 'Test Writer', ndType: true, ndTypeSeed: ${JSON.stringify(adj.ndTypeSeed)}, ndTypeScale: 0.7, ndTypeAnchor: 'bottom', ndTypeShift: -8 }).then((c) => (window._ex = c, c.mime))`);
+  if (process.env.SHOT) {
+    const b64 = await js(`(async () => { const c = window._ex; return c.base64; })()`).catch(() => '');
+    if (b64) fs.writeFileSync(process.env.SHOT.replace(/\.png$/, '-export.jpg'), Buffer.from(b64, 'base64'));
+  }
+  assert.equal(ex2, 'image/jpeg');
+  // Back to as it was set: no size or place of its own
+  await js(`${tile}.querySelector('.b-refresh').click()`);
+  await pickChoice('Adjust the title');
+  await js(`document.querySelector('.nd-adjust .m-reset').click()`);
+  await js(`document.querySelector('.nd-adjust .m-ok').click()`);
+  await tick(1200);
+  assert.equal(await js(`${tile}.classList.contains('nd-at-bottom')`), false);
+  const back = JSON.parse(fs.readFileSync(path.join(LIB, dir, 'book.json'), 'utf8'));
+  assert.equal(back.ndTypeScale, undefined);
+  assert.equal(back.ndTypeAnchor, undefined);
+  assert.ok(Math.abs((await sizeOf()) - before) < 0.6 || face !== first.slice(3), 'full size again');
   await js(`${tile}.querySelector('.b-refresh').click()`);
   await pickChoice('Just the image');
   assert.equal(await js(`${tile}.classList.contains('has-cover')`), true);

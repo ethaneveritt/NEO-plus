@@ -503,7 +503,10 @@ const NeoCovers = (() => {
     if (opts.artOnly) return canvas;
 
     const planned = plan(meta, art);
-    const t = TEMPLATES.find((x) => x.id === planned.template);
+    const t0 = TEMPLATES.find((x) => x.id === planned.template);
+    // NEO+ hook: a title set larger or smaller, higher or lower (neo-plus/covers-plus.js)
+    const t = meta.ndTypeAnchor ? { ...t0, anchor: meta.ndTypeAnchor } : t0;
+    if (meta.ndTypeScale) for (const ln of planned.lines) ln.size *= meta.ndTypeScale;
     const s = OW / TILE_W; // tile px → export px; everything below is in tile px
     ctx.save();
     ctx.scale(s, s);
@@ -515,11 +518,12 @@ const NeoCovers = (() => {
     const lineH = (ln) => ln.size * (ln.small ? 1.4 : t.lead);
     const blockH = planned.lines.reduce((n, ln) => n + lineH(ln), 0);
     const AU = 7.5, AU_GAP = 7;
-    const left = t.anchor === 'top' && !t.band;
+    const left = t0.anchor === 'top' && !t.band; // NEO+ hook: set left as the face is, wherever it sits
     let top;
-    if (t.anchor === 'top') top = 10 + (t.rule ? 11 : 0);
+    if (t.anchor === 'top') top = 10 + (t.rule ? 11 : 0) + (t.band ? 8 : 0);
     else if (t.anchor === 'bottom') top = TILE_H - 10 - AU - AU_GAP - blockH;
     else top = (TILE_H - (t.band ? blockH + AU + AU_GAP + 6 : blockH)) / 2 - (t.band ? 0 : 2);
+    top += meta.ndTypeShift || 0; // NEO+ hook
 
     // veils and plates go under the type
     if (t.band) {
