@@ -121,6 +121,15 @@ test('Google Docs: part folders and the Master read the same; Docs numbered by t
   if (heads) assert.ok(!heads.some((h) => /HARBOR TOWN:/.test(h)), JSON.stringify(heads));
 });
 
+test('a book whose parts are all titles alone: Docs numbered 1, 2, 3 in order, not 0a', async () => {
+  for (const id of PARTS) await labels(id, { mode: 'none' });
+  assert.deepEqual(await names(), ['The Crossing', 'The Shoals', 'The Harbor Town', 'The Lantern']);
+  const m = await js(`NeoPlus.model().entries.map((e) => [e.kind, e.section])`);
+  assert.deepEqual(m.filter((e) => e[0] === 'chapter').map((e) => e[1]), [1, 2, 3, 4]);
+  const docs = await js(`NeoPlus.model().entries.filter((e) => e.kind === 'chapter').map((e) => e.section + '.')`);
+  assert.ok(!docs.some((d) => /a\./.test(d)), JSON.stringify(docs));
+});
+
 test('Back to NEO’s Part I, II, III', async () => {
   await labels('p-1', { reset: true });
   assert.deepEqual(await names(), ['Part I', 'Part II', 'Part III', 'Part IV']);

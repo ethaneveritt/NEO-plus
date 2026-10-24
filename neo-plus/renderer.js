@@ -265,10 +265,12 @@
     // number after it. A book without parts counts its chapters as part 1.
     const hasParts = book.chapterOrder.some((c) => chapterKind(c) === 'part');
     // (a part's number is the one it shows: a second volume's first part can
-    // be Part IV; a part with no label takes the number before it, with "a")
+    // be Part IV; a part with no label takes the number before it, with "a".
+    // In a book where no part shows a number, they count 1, 2, 3 in order)
+    const P = window.NeoPlusParts;
+    const counted = hasParts && !!P && book.chapterOrder.some((c) => chapterKind(c) === 'part' && !P.unlabeled(c));
     let section = 0, partsSeen = 0;
     const masterOut = new Set(Array.isArray(book.ndMasterOut) ? book.ndMasterOut : []);
-    const P = window.NeoPlusParts;
     for (const chId of book.chapterOrder) {
       const kind = chapterKind(chId);
       if (kind === 'contents') continue;
@@ -284,7 +286,7 @@
       const name = heads.length ? heads.map((h) => h.text).join(' ') : (chapterHeading(chId) || chapterName(chId));
       if (kind === 'part') {
         part = chId;
-        if (P && P.unlabeled(chId)) section = `${partsSeen}a`;
+        if (P && P.unlabeled(chId)) section = counted ? `${partsSeen}a` : (partsSeen += 1);
         else section = partsSeen = (P && P.number(chId)) || partsSeen + 1;
         const bare = !!(P && P.unlabeled(chId));
         // the folder and the contents line read "Part I: The Crossing"; the
