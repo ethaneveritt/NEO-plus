@@ -47,7 +47,7 @@
       text: String(b.text || ''),
       marks: [],
       align: ALIGN_TO_DOCS[b.align] ? b.align : 'left',
-      ind: b.ind === 'poetry' ? 'poetry' : b.ind === 'flush' ? 'flush' : 'normal',
+      ind: b.ind === 'poetry' || b.ind === 'quote' || b.ind === 'flush' ? b.ind : 'normal',
       pb: !!b.pb,
       sa: num(b.sa, 0),
       sb: num(b.sb, 0),
@@ -179,7 +179,7 @@
       const align = ALIGN_FROM_DOCS[ps.alignment] || 'left';
       const first = mag(ps.indentFirstLine);
       const left = mag(ps.indentStart);
-      const ind = left >= 6 ? 'poetry' : first >= 6 ? 'normal' : 'flush';
+      const ind = left >= 6 && mag(ps.indentEnd) >= 6 ? 'quote' : left >= 6 ? 'poetry' : first >= 6 ? 'normal' : 'flush';
       const k = text === BREAK_TEXT && align === 'center' ? 'brk' : 'p';
       const marks = [];
       for (let i = 0; i < flags.length;) {
@@ -214,10 +214,11 @@
           spaceAbove: PT(b.sa),
           spaceBelow: PT(b.sb),
           indentFirstLine: PT(b.k === 'p' && b.ind === 'normal' ? INDENT : 0),
-          indentStart: PT(b.ind === 'poetry' ? INDENT : 0),
+          indentStart: PT(b.ind === 'poetry' || b.ind === 'quote' ? INDENT : 0),
+          indentEnd: PT(b.ind === 'quote' ? INDENT : 0), // NEO+: a block quote, inset from both sides (an epigraph)
           pageBreakBefore: b.pb
         },
-        fields: 'namedStyleType,alignment,lineSpacing,spaceAbove,spaceBelow,indentFirstLine,indentStart,pageBreakBefore'
+        fields: 'namedStyleType,alignment,lineSpacing,spaceAbove,spaceBelow,indentFirstLine,indentStart,indentEnd,pageBreakBefore'
       }
     };
   }

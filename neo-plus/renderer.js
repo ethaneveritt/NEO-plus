@@ -330,8 +330,11 @@
         if (kind === 'copyright') return { ...b, ind: 'flush', sz: 10, ls: 115, sb: 8 };
         return b;
       };
+      // an epigraph as neo-plus/epigraph.js sets it everywhere: centered when
+      // short, a block quote when long, its attribution upright
+      const shown = ownPage && kind === 'epigraph' && window.NeoPlusEpigraph ? window.NeoPlusEpigraph.look(blocks) : null;
       blocks.forEach((b, i) => {
-        const set = ownPage ? look(b) : b;
+        const set = shown ? shown[i] : ownPage ? look(b) : b;
         body.push(m(i === 0 && (ownPage || !heads.length) ? { ...set, pb: true, ...(ownPage ? { sa: Math.max(set.sa || 0, 144) } : {}) } : set, name));
       });
     }

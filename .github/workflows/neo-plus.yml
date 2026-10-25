@@ -104,6 +104,7 @@ jobs:
           xvfb-run -a npx electron --no-sandbox scripts/neo-plus-fonts.e2e.js
           xvfb-run -a npx electron --no-sandbox scripts/neo-plus-setapart.e2e.js
           xvfb-run -a npx electron --no-sandbox scripts/neo-plus-guard.e2e.js
+          xvfb-run -a npx electron --no-sandbox scripts/neo-plus-epigraph.e2e.js
 
       - name: Push the merge
         run: git push origin HEAD:main

@@ -553,6 +553,40 @@ test('in the Master, an epigraph page after the last chapter starts a page of it
   await sync();
 });
 
+test('in the Master, a long epigraph is a block quote; its attribution right, upright, the title italic', async () => {
+  const LONG = 'The keeper rose before the gulls each morning to trim the wick and polish the brass, and in forty years he never once let the lamp go dark, not in the gale of the hard winter nor on the night his own boat failed to come home.';
+  await js(`(async () => {
+    const id = 'ch-epigraph-long';
+    book.chapterOrder.push(id);
+    book.chapterKinds = book.chapterKinds || {}; book.chapterKinds[id] = 'epigraph';
+    chapterHTML[id] = ${JSON.stringify(`<p>${LONG}</p><p>—from <i>The Tide Tables</i>, by Mara Quill</p>`)};
+    await persistChapter(id, chapterHTML[id]);
+    await saveMeta();
+    renderChapters();
+  })()`);
+  await tick(400);
+  await sync();
+  const read = async () => (await fake({ do: 'doc', id: (await master()).id })).body.content.filter((e) => e.paragraph);
+  const ps = await read();
+  const text = (e) => e.paragraph.elements.map((x) => x.textRun.content).join('');
+  const body = ps.find((e) => text(e).startsWith('The keeper'));
+  const attr = ps.find((e) => text(e).startsWith('—from'));
+  assert.equal(body.paragraph.paragraphStyle.alignment, 'JUSTIFIED');
+  assert.equal(body.paragraph.paragraphStyle.indentStart.magnitude, 36);
+  assert.equal(body.paragraph.paragraphStyle.indentEnd.magnitude, 36);
+  assert.equal(body.paragraph.paragraphStyle.lineSpacing, 115);
+  assert.equal(attr.paragraph.paragraphStyle.alignment, 'END');
+  const runs = attr.paragraph.elements.map((x) => [x.textRun.content, !!x.textRun.textStyle.italic]).filter((r) => r[0].trim());
+  assert.deepEqual(runs.filter((r) => r[1]).map((r) => r[0]), ['The Tide Tables']);
+  // and the next sync finds nothing to change
+  const before = JSON.stringify(await read());
+  await sync();
+  assert.equal(JSON.stringify(await read()), before);
+  await js(`(async () => { book.chapterOrder = book.chapterOrder.filter((c) => c !== 'ch-epigraph-long'); await saveMeta(); renderChapters(); })()`);
+  await tick(300);
+  await sync();
+});
+
 test('a chapter deleted in NEO goes to "Deleted chapters" in Drive', async () => {
   const order = await chIds();
   const last = order[order.length - 1];
