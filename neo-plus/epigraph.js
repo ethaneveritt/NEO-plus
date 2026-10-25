@@ -37,6 +37,11 @@
       return needle + (s ? (isLong(s.paras) ? ' nd-long' : ' nd-short') : '');
     });
   }
+  // an empty line inside an epigraph is a short gap, not a full line, so a
+  // long one with its paragraphs spaced out still fits its page
+  const GAP = /<p(?: class="([^"]*)")?>(?:\s|&nbsp;|&#160;|\u00a0|\u2800|<br\s*\/?>)*<\/p>/g;
+  const gaps = (html, open) => html.replace(new RegExp(`(<section class="${open}[^"]*"[^>]*>)([\\s\\S]*?)(</section>)`, 'g'),
+    (all, a, inner, b) => a + inner.replace(GAP, (m, cls) => `<p class="${cls ? cls + ' ' : ''}nd-gap">&nbsp;</p>`) + b);
   const withCss = (html, css) => {
     const at = html.lastIndexOf('</head>');
     return at < 0 ? html : html.slice(0, at) + `<style>${css}</style>` + html.slice(at);
@@ -48,6 +53,9 @@
     ${sel}.nd-long { text-align: justify; }
     ${sel}.nd-long p { text-align: justify; -webkit-hyphens: auto; hyphens: auto; margin: 0 0 0.55em; }
     ${sel}.nd-long p.attr { text-align: right; -webkit-hyphens: manual; hyphens: manual; margin-top: 1.1em; }
+    ${sel} p.nd-gap { height: 0.7em; line-height: 0.7em; margin: 0; overflow: hidden; font-size: 1em; }
+    ${sel} p.attr { break-before: avoid; page-break-before: avoid; }
+    ${sel}.nd-long { break-inside: avoid; page-break-inside: avoid; }
   `;
 
   // ---- the PDF
@@ -57,8 +65,8 @@
       const html = own.apply(this, arguments);
       const list = epigraphs(data);
       if (typeof html !== 'string' || !list.length) return html;
-      return withCss(tagEach(html, 'class="page epigraph', list), ATTR('.epigraph') + `
-        .epigraph.nd-long { padding-top: 16vh; margin: 0 0.4in; }`);
+      return withCss(gaps(tagEach(html, 'class="page epigraph', list), 'page epigraph'), ATTR('.epigraph') + `
+        .epigraph.nd-long { padding-top: 8vh; margin: 0 0.4in; font-size: 0.9em; line-height: 1.5; }`);
     };
   }
   // ---- the print PDF (a book's interior)
@@ -68,8 +76,8 @@
       const html = own.apply(this, arguments);
       const list = epigraphs(d);
       if (typeof html !== 'string' || !list.length) return html;
-      return withCss(tagEach(html, 'class="fm epigraph', list), ATTR('.epigraph') + `
-        .epigraph.nd-long { padding-top: 1in; padding-left: 0.3in; padding-right: 0.3in; }`);
+      return withCss(gaps(tagEach(html, 'class="fm epigraph', list), 'fm epigraph'), ATTR('.epigraph') + `
+        .epigraph.nd-long { padding-top: 0.6in; padding-left: 0.25in; padding-right: 0.25in; font-size: 0.94em; line-height: 1.38; }`);
     };
   }
   // ---- the EPUB: the page, and its stylesheet

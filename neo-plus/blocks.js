@@ -213,7 +213,9 @@
           lineSpacing: b.ls,
           spaceAbove: PT(b.sa),
           spaceBelow: PT(b.sb),
-          indentFirstLine: PT(b.k === 'p' && b.ind === 'normal' ? INDENT : 0),
+          // (Docs measures the first line from the margin, like the rest: a
+          // block set in has its first line set in as far, not hanging)
+          indentFirstLine: PT(b.k === 'p' && (b.ind === 'normal' || b.ind === 'poetry' || b.ind === 'quote') ? INDENT : 0),
           indentStart: PT(b.ind === 'poetry' || b.ind === 'quote' ? INDENT : 0),
           indentEnd: PT(b.ind === 'quote' ? INDENT : 0), // NEO+: a block quote, inset from both sides (an epigraph)
           pageBreakBefore: b.pb

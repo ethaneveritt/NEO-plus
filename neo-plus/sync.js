@@ -37,7 +37,7 @@ const POLL_MS = 15000;      // how often to look for edits made in Docs, when no
 const COMMENTS_MS = 60000;  // how often to look for new comments
 const MAX_COMMENTS = 5;     // per sync, for edits undone in the Master Doc
 // bumped when the Master's look changes: an older Master is set again, whole
-const MASTER_STYLE = 3;
+const MASTER_STYLE = 4; // 4: indented lines no longer hang (an epigraph, verse)
 // bumped when what a chapter Doc's paragraphs say about themselves changes:
 // what both sides agreed on is looked at afresh (nothing is lost: a Doc that
 // differs only in look is just set again)

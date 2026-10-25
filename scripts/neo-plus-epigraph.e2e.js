@@ -44,6 +44,10 @@ const setEpigraph = (html) => js(`(async () => {
   renderChapters();
 })()`);
 const longHtml = `<p>${LONG}</p><p>${LONG2}</p><p>${KICK}</p><p>${ATTR}</p>`;
+// as long as a real one: two full paragraphs, empty lines between, a last line
+const P1 = 'The keeper rose before the gulls each morning to trim the wick and polish the brass. He logged the wind and the swell in a hand so small the inspectors needed a glass to read it, and he logged the ships too, every hull that passed the point between the first gray light and the last, with its flag, its heading, and how near it stood to the shoals. In forty years he never once let the lamp go dark: not in the gale of the hard winter, when the spray froze on the gallery rail and the glass had to be scraped by hand each hour, nor on the night his own boat failed to come home from the harbor town.';
+const P2 = 'The keeper was the youngest of the three who had first rowed out to the rock, and he outlived the others by many years. He kept their names on the first page of the log and their chairs by the stove, and when the board of lights sent word that the lamp would be run by clockwork and the keepers brought ashore, he wrote back once, in that same small hand, that the light had never wanted for a keeper and would not begin to now. The board did not write again, and the lamp burned on for as long as he did.';
+const fullHtml = `<p>${P1}</p><p><br></p><p>${P2}</p><p><br></p><p>${KICK}</p><p>${ATTR}</p>`;
 const shortHtml = `<p>${KICK}</p><p>${ATTR}</p>`;
 // an export's html, laid out in a frame, to read what it shows
 const frame = (html, code) => js(`(async () => {
@@ -139,6 +143,32 @@ test('the Master: a block quote, close-set; the attribution right and upright, i
   const t0 = attr.text.indexOf('The Tide Tables');
   assert.deepEqual(attr.marks.filter((x) => x[2].includes('i')).map((x) => [x[0], x[1]]), [[t0, t0 + 'The Tide Tables'.length]]);
   assert.ok(attr.sz < 12, 'a touch smaller');
+});
+
+test('a long epigraph with empty lines between its paragraphs fits its page in the PDF and the print PDF', async () => {
+  await setEpigraph(fullHtml);
+  await tick(1800);
+  const html = await js(`buildHtml(bookExportData(), {})`);
+  assert.match(html, /nd-gap/);
+  const pages = async (h, opts) => {
+    const file = path.join(tmp, 'epi-' + Date.now() + '.html');
+    fs.writeFileSync(file, h);
+    const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true } });
+    try {
+      await loadFile.call(w, file);
+      await tick(500);
+      const pdf = await w.webContents.printToPDF(opts);
+      if (SHOT) fs.writeFileSync(SHOT.replace(/\.png$/, `-${opts.preferCSSPageSize ? 'print' : 'pdf'}-full.pdf`), pdf);
+      return (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+    } finally { w.destroy(); }
+  };
+  // the title page, the chapter, the epigraph: three pages
+  assert.equal(await pages(html, { pageSize: 'Letter', margins: { top: 1, bottom: 1, left: 1, right: 1 } }), 3);
+  // the print PDF: the epigraph on one page, its attribution with it
+  const book6x9 = await js(`buildPrintHtml(bookExportData(), { trim: '6x9', fonts: '' })`);
+  const n = await pages(book6x9, { preferCSSPageSize: true, margins: { marginType: 'none' } });
+  const without = await pages(book6x9.replace(/<section class="fm epigraph[\s\S]*?<\/section>/, ''), { preferCSSPageSize: true, margins: { marginType: 'none' } });
+  assert.ok(n - without <= 2, `the epigraph takes ${n - without} pages (one, and a blank before it at most)`);
 });
 
 test('a short epigraph stays centered, its attribution under it, the title italic', async () => {

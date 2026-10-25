@@ -574,6 +574,7 @@ test('in the Master, a long epigraph is a block quote; its attribution right, up
   assert.equal(body.paragraph.paragraphStyle.alignment, 'JUSTIFIED');
   assert.equal(body.paragraph.paragraphStyle.indentStart.magnitude, 36);
   assert.equal(body.paragraph.paragraphStyle.indentEnd.magnitude, 36);
+  assert.equal(body.paragraph.paragraphStyle.indentFirstLine.magnitude, 36, 'the first line set in as far as the rest, not hanging');
   assert.equal(body.paragraph.paragraphStyle.lineSpacing, 115);
   assert.equal(attr.paragraph.paragraphStyle.alignment, 'END');
   const runs = attr.paragraph.elements.map((x) => [x.textRun.content, !!x.textRun.textStyle.italic]).filter((r) => r[0].trim());
