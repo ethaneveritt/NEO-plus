@@ -210,6 +210,53 @@
       box.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }, true);
+  // ↑ / ↓ on an Outline line: NEO goes to the line above or below. A line
+  // that runs onto more than one row (a long note, a list) is walked
+  // through first, row by row; only from its top row (↑) or its bottom row
+  // (↓) does the arrow go on to the next line.
+  const caretMid = (range) => {
+    let r = range.cloneRange();
+    // a caret between elements (the end of a line that ends in a list):
+    // measured at the nearest letter
+    if (r.startContainer.nodeType === 1) {
+      const c = r.startContainer;
+      const after = c.childNodes[r.startOffset], prev = c.childNodes[r.startOffset - 1];
+      const walk = (n, last) => { while (n && n.nodeType === 1 && n.childNodes.length) n = last ? n.lastChild : n.firstChild; return n; };
+      const t = prev ? walk(prev, true) : walk(after, false);
+      if (t && t.nodeType === 3) { r = document.createRange(); r.setStart(t, prev ? t.length : 0); r.collapse(true); }
+    }
+    let rects = r.getClientRects();
+    if (!rects.length) {
+      const n = r.startContainer;
+      try {
+        if (n.nodeType === 3 && r.startOffset < n.length) r.setEnd(n, r.startOffset + 1);
+        else if (n.nodeType === 3 && r.startOffset > 0) r.setStart(n, r.startOffset - 1);
+      } catch { /* measured as it is */ }
+      rects = r.getClientRects();
+    }
+    const rc = rects[0] || (r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement).getBoundingClientRect();
+    return rc.top + rc.height / 2;
+  };
+  document.addEventListener('keydown', (e) => {
+    if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey || e.isComposing) return;
+    const line = e.target && e.target.closest && e.target.closest('.ol-text[contenteditable="true"]');
+    if (!line) return;
+    const sel = getSelection();
+    if (!sel.rangeCount || !sel.modify) return;
+    const was = sel.getRangeAt(0).cloneRange();
+    const before = caretMid(was);
+    sel.modify('move', e.key === 'ArrowUp' ? 'backward' : 'forward', 'line');
+    const now = sel.rangeCount ? sel.getRangeAt(0) : null;
+    if (now && line.contains(now.startContainer) && Math.abs(caretMid(now) - before) > 3) {
+      // a row of its own was there: the caret is on it
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    // no row that way: back where it was, and NEO goes on to the next line
+    sel.removeAllRanges();
+    sel.addRange(was);
+  }, true);
   document.addEventListener('paste', (e) => {
     const box = e.target && e.target.closest && e.target.closest(RICH);
     if (box) pasteInto(e);

@@ -81,6 +81,33 @@ test('the Outline (list): a list pasted from Google Docs stays on its line, bull
   assert.equal(JSON.parse(fs.readFileSync(path.join(LIB, dir, 'book.json'), 'utf8')).chapterNotes[ch], NOTE);
 });
 
+test('the Outline (list): ↑ and ↓ go row by row through a line that runs onto several, and on to the next line only from its top or bottom row', async () => {
+  const [c0, c1] = await js('book.chapterOrder.slice(0, 2)');
+  const line = (ch) => `document.querySelector('#outline-list .ol-line.ol-chapter[data-ch-id="${ch}"] .ol-text')`;
+  const at = (ch, where) => js(`(() => { const el = ${line(ch)}; el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(${where === 'start'}); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+  const press = (k) => js(`(() => { const el = document.activeElement; el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, code: ${JSON.stringify(k)}, bubbles: true, cancelable: true })); })()`);
+  const where = () => js(`(() => { const el = document.activeElement.closest('.ol-line'); const r = getSelection().getRangeAt(0); const li = (r.startContainer.nodeType === 3 ? r.startContainer.parentElement : r.startContainer).closest('li, div, .ol-text'); return [el && el.dataset.chId, li && li.textContent.trim().slice(0, 14)]; })()`);
+  // the first chapter's line holds four rows (a sentence and a list)
+  await at(c0, 'end');
+  await press('ArrowUp');
+  assert.deepEqual(await where(), [c0, 'who put it out'], 'up a row, same line');
+  await press('ArrowUp');
+  await press('ArrowUp');
+  assert.equal((await where())[0], c0, 'still on the line at its top row');
+  await press('ArrowUp');
+  assert.equal((await where())[0], c0, 'nothing above the first line');
+  // from the top row of the second line, ↑ goes to the first line
+  await at(c1, 'start');
+  await press('ArrowUp');
+  assert.equal((await where())[0], c0, 'on to the line above');
+  // from the bottom row of the first line, ↓ goes to the second
+  await at(c0, 'end');
+  await press('ArrowDown');
+  assert.equal((await where())[0], c1, 'on to the line below');
+  await js('document.activeElement.blur()');
+  await tick(300);
+});
+
 test('a note with no italics or lists, stars and all, reads and saves as it was', async () => {
   const ch = await js('book.chapterOrder[1]');
   await js(`(() => { book.chapterNotes[${JSON.stringify(ch)}] = 'Two * three, and a - dash'; renderOutline(); })()`);
