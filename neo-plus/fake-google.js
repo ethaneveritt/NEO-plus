@@ -16,7 +16,28 @@ class FakeDoc {
   constructor() {
     this.chars = [{ c: '\n', ts: {}, ps: { namedStyleType: 'NORMAL_TEXT' } }];
     this.headers = {};
+    this.lists = {};
     this.revision = 1;
+  }
+  // Google's bullets: a list for the paragraphs the range touches, each as
+  // deep as the tabs it starts with (which go)
+  createBullets(s, e, preset) {
+    const listId = newId('kix.');
+    const numbered = /^NUMBERED/.test(preset);
+    this.lists[listId] = { listProperties: { nestingLevels: Array.from({ length: 9 }, () => (numbered ? { glyphType: 'DECIMAL' } : { glyphSymbol: '●' })) } };
+    const lo = s - 1, hi = Math.max(e - 1, s);
+    for (const [ps, pe] of this.paragraphs().reverse()) {
+      if (!(ps < hi && pe >= lo)) continue;
+      let tabs = 0;
+      while (this.chars[ps + tabs].c === '\t') tabs++;
+      const nl = this.chars[pe];
+      if (tabs) this.chars.splice(ps, tabs);
+      nl.ps.bullet = { listId, nestingLevel: tabs };
+    }
+  }
+  deleteBullets(s, e) {
+    const lo = s - 1, hi = Math.max(e - 1, s);
+    for (const [ps, pe] of this.paragraphs()) if (ps < hi && pe >= lo) delete this.chars[pe].ps.bullet;
   }
   get end() { return this.chars.length + 1; } // body endIndex
   // the paragraph (as [startChar, endChar] 0-based, inclusive of its '\n') around char i
@@ -75,11 +96,12 @@ class FakeDoc {
           rs = i + 1;
         }
       }
-      content.push({ startIndex: ps + 1, endIndex: pe + 2, paragraph: { elements, paragraphStyle: { ...this.chars[pe].ps } } });
+      const { bullet, ...style } = this.chars[pe].ps;
+      content.push({ startIndex: ps + 1, endIndex: pe + 2, paragraph: { elements, paragraphStyle: style, ...(bullet ? { bullet: { ...bullet } } : {}) } });
     }
     const headers = {};
     for (const [hid, h] of Object.entries(this.headers)) headers[hid] = { headerId: hid, content: [{ paragraph: { elements: [{ textRun: { content: h.text } }] } }] };
-    return { documentId: id, title, revisionId: 'r' + this.revision, body: { content }, headers };
+    return { documentId: id, title, revisionId: 'r' + this.revision, body: { content }, headers, lists: JSON.parse(JSON.stringify(this.lists)) };
   }
   text() { return this.chars.map((x) => x.c).join(''); }
 }
@@ -232,6 +254,11 @@ class FakeGoogle {
           const u = r.updateTextStyle;
           if (u.range.segmentId) { replies.push({}); continue; }
           d.textStyle(u.range.startIndex, u.range.endIndex, u.textStyle, u.fields);
+        } else if (r.createParagraphBullets) {
+          const u = r.createParagraphBullets;
+          d.createBullets(u.range.startIndex, u.range.endIndex, u.bulletPreset);
+        } else if (r.deleteParagraphBullets) {
+          d.deleteBullets(r.deleteParagraphBullets.range.startIndex, r.deleteParagraphBullets.range.endIndex);
         } else if (r.deleteHeader) {
           delete d.headers[r.deleteHeader.headerId];
         } else if (r.createHeader) {

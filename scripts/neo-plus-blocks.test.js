@@ -210,3 +210,37 @@ test('blank lines: kept between paragraphs, none at the ends, none beside a ***,
   assert.deepEqual(got.map((b) => (b.k === 'brk' ? '***' : b.text)), ['Dear Tom,', '', 'The tide came in early.', '***', 'Yours,']);
   assert.equal(B.toNeoHtml(p('')), '<p><br></p>');
 });
+
+test('notes as text: italics, bold and lists read as people type them, and back the same', () => {
+  const lines = ['A plan.', '*The Tide Tables* first', '- a bullet with **bold**', '    - two deep', '1. numbered', '2 * 3 stays as typed', ''];
+  const blocks = lines.map((l) => B.mdToBlock(l));
+  assert.deepStrictEqual(blocks.map((b) => b.li || null), [null, null, 'ul0', 'ul2', 'ol0', null, null]);
+  assert.deepStrictEqual(blocks[1].marks, [[0, 15, 'i']]);
+  assert.deepStrictEqual(blocks[2].marks, [[14, 18, 'b']]);
+  assert.strictEqual(blocks[5].text, '2 * 3 stays as typed');
+  assert.deepStrictEqual(blocks.map(B.blockToMd), lines);
+  // a line that only looks like a list item stays a line
+  const plain = B.normalize({ k: 'p', text: '1. not a list' });
+  assert.strictEqual(B.mdToBlock(B.blockToMd(plain)).li, undefined);
+  assert.strictEqual(B.mdToBlock(B.blockToMd(plain)).text, '1. not a list');
+});
+
+test('list items go to a Doc as Google bullets, as deep as they are, and come back as list items', async () => {
+  const g = new FakeGoogle();
+  const id = await freshDoc(g);
+  const note = (l) => B.mdToBlock(l, { ls: 115 });
+  const want = ['Plan', '- one', '  - one, deeper', '- two', '', '1. first', '1. second', 'After'].map(note);
+  await write(g, id, want);
+  const doc = await g.getDoc(id);
+  const bulleted = doc.body.content.filter((e) => e.paragraph && e.paragraph.bullet);
+  assert.strictEqual(bulleted.length, 5);
+  assert.ok(!g.docText(id).includes('\t'), 'the tabs went into the bullet');
+  const back = B.fromDoc(doc, { keepEmpty: true });
+  assert.deepStrictEqual(keys(back), keys(want));
+  // edits: a bullet becomes a line, a line goes in among the bullets, a list item changes its words
+  const next = ['Plan', 'one, now a line', '- one', 'between', '  - one, deeper', '- two!', '', '1. first', '1. second', 'After'].map(note);
+  await write(g, id, next);
+  assert.deepStrictEqual(keys(B.fromDoc(await g.getDoc(id), { keepEmpty: true })), keys(next));
+  // nothing more to do
+  assert.strictEqual(B.editRequests(await g.getDoc(id), next).filter((r) => !r.insertText || r.insertText.text !== '\n').length, 0);
+});

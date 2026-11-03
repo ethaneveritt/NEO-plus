@@ -334,6 +334,10 @@ class Sync {
     const note = (text, extra = {}) => B.normalize({ k: 'p', text, ind: 'flush', ls: 115, ...extra });
     // each line a paragraph; blank lines kept (the gaps between notes)
     const lines = (text) => trimGaps(String(text || '').split('\n').map((x) => x.trim())).map((x) => note(x));
+    // a chapter's notes keep their italics, bold and bullets (written as
+    // *italic*, **bold**, "- " and "1. "; neo-plus/richnotes.js): in the Doc,
+    // real italics and Google's own bullets
+    const richLines = (text) => trimGaps(String(text || '').split('\n').map((x) => x.replace(/\s+$/, '')), (x) => !x.trim()).map((x) => B.mdToBlock(x, { ind: 'flush', ls: 115 }));
 
     // Chapter Notes: every chapter's heading, so notes can be added under
     // any of them in Docs too
@@ -343,7 +347,7 @@ class Sync {
       const label = docNames.get(e.chId) || e.name;
       labels.set(label, e.chId);
       chapterWant.push(B.heading(label, label.length, { ls: 115, sa: chapterWant.length ? 12 : 0 }));
-      chapterWant.push(...lines((model.notes.chapters || {})[e.chId]));
+      chapterWant.push(...richLines((model.notes.chapters || {})[e.chId]));
     }
     const darlingsWant = [];
     for (const d of model.notes.darlings || []) {
@@ -620,10 +624,10 @@ function readChapterNotes(blocks, labels) {
   for (const b of blocks) {
     if (B.isHeading(b) && labels.has(b.text)) { at = labels.get(b.text); lines[at] = lines[at] || []; continue; }
     if (!at) continue;
-    lines[at].push(B.plain(b));
+    lines[at].push(B.blockToMd(b));
   }
   const out = {};
-  for (const [k, v] of Object.entries(lines)) out[k] = trimGaps(v.map((x) => x.trim())).join('\n');
+  for (const [k, v] of Object.entries(lines)) out[k] = trimGaps(v.map((x) => x.replace(/\s+$/, '')), (x) => !x.trim()).join('\n');
   return out;
 }
 

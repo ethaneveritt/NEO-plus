@@ -95,7 +95,7 @@
     #nd-panel .nd-p-head { font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 10px; }
     #nd-panel .nd-p-head b { display: block; font-size: 13px; letter-spacing: 0; text-transform: none; font-weight: 600;
       color: inherit; margin-top: 3px; font-family: var(--body-font); }
-    #nd-panel textarea, #nd-panel .nd-pad { flex: 1; width: 100%; background: none; border: none; outline: none; resize: none;
+    #nd-panel textarea, #nd-panel .nd-pad, #nd-panel .nd-rich { flex: 1; width: 100%; background: none; border: none; outline: none; resize: none;
       color: inherit; font-family: var(--body-font); font-size: 14px; line-height: 1.6; overflow-y: auto; }
     #nd-panel .nd-pad p { margin: 0 0 .4em; }
     #nd-panel textarea::placeholder { color: var(--muted); opacity: .6; font-style: italic; }
@@ -146,7 +146,9 @@
     .nd-list textarea { width: 100%; min-height: 3.4em; background: none; border: none; border-bottom: 1px solid rgba(128,128,128,.25);
       color: inherit; font: inherit; resize: none; outline: none; overflow: hidden; padding: 2px 0 6px; }
     .nd-list textarea:focus { border-bottom-color: var(--accent); }
-    .nd-list textarea::placeholder { color: #aaa; font-style: italic; }`;
+    .nd-list textarea::placeholder { color: #aaa; font-style: italic; }
+    .nd-list .nd-rich { width: 100%; min-height: 3.4em; border-bottom: 1px solid rgba(128,128,128,.25); padding: 2px 0 6px; margin-bottom: 4px; }
+    .nd-list .nd-rich:focus { border-bottom-color: var(--accent); }`;
   document.head.appendChild(st);
 
   // ----------------------------------------------------------- the pieces
@@ -360,13 +362,13 @@
     if (mode === 'chapter') {
       const chId = (currentChapterId && book.chapterOrder.includes(currentChapterId)) ? currentChapterId : storyChapters()[0];
       panel.dataset.ch = chId || '';
-      panel.innerHTML = `<div class="nd-p-head">${t('Chapter Notes')}<b></b></div><textarea spellcheck="true"></textarea>`;
+      panel.innerHTML = `<div class="nd-p-head">${t('Chapter Notes')}<b></b></div>`;
       panel.querySelector('b').textContent = chId ? chapterTitle(chId) : '';
-      const ta = panel.querySelector('textarea');
-      ta.placeholder = chapterNotes ? t('Notes for this chapter…') : t('Reading…');
-      ta.disabled = !chapterNotes || !chId;
-      ta.value = (chapterNotes && chId && chapterNotes[chId]) || '';
-      ta.addEventListener('input', () => setChapterNote(chId, ta.value));
+      // italics, bold and lists kept (neo-plus/richnotes.js)
+      const box = window.NeoPlusRich.richBox((chapterNotes && chId && chapterNotes[chId]) || '', (v) => setChapterNote(chId, v),
+        chapterNotes ? t('Notes for this chapter…') : t('Reading…'));
+      if (!chapterNotes || !chId) { box.contentEditable = 'false'; box.dataset.off = '1'; }
+      panel.appendChild(box);
     } else if (mode === 'notepad') {
       panel.innerHTML = `<div class="nd-p-head">${t('Notepad')}<b></b></div><div class="nd-pad" contenteditable="true" spellcheck="true"></div>`;
       panel.querySelector('b').textContent = book ? (book.title || t('Untitled')) : '';
@@ -389,10 +391,10 @@
   // Chapter Notes follow the chapter you're in (unless you're typing in them)
   function followChapter() {
     if (mode !== 'chapter' || panel.hidden) return;
-    const ta = panel.querySelector('textarea');
-    if (ta && document.activeElement === ta) return;
+    const ta = panel.querySelector('.nd-rich');
+    if (ta && ta.contains(document.activeElement)) return;
     const chId = currentChapterId && book.chapterOrder.includes(currentChapterId) ? currentChapterId : storyChapters()[0];
-    if ((chId || '') !== panel.dataset.ch || (ta && ta.disabled && chapterNotes)) drawPanel();
+    if ((chId || '') !== panel.dataset.ch || (ta && ta.dataset.off && chapterNotes)) drawPanel();
   }
 
   // ------------------------------------------- finding a comment's passage
@@ -899,14 +901,8 @@
     for (const chId of storyChapters()) {
       const h = document.createElement('h3');
       h.textContent = chapterTitle(chId);
-      const ta = document.createElement('textarea');
-      ta.spellcheck = true;
-      ta.placeholder = t('Notes for this chapter…');
-      ta.value = chapterNotes[chId] || '';
-      const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
-      ta.addEventListener('input', () => { setChapterNote(chId, ta.value); grow(); });
-      notesBody.append(h, ta);
-      requestAnimationFrame(grow);
+      const box = window.NeoPlusRich.richBox(chapterNotes[chId] || '', (v) => setChapterNote(chId, v), t('Notes for this chapter…'));
+      notesBody.append(h, box);
     }
   }
   function jumpTo(id) {
@@ -1006,9 +1002,11 @@
       let html;
       if (!merge) html = padToHtml(padIn);
       else {
-        const have = new Set(padBlocks(padNow || '').map((b) => b.text.trim()));
-        const extra = padIn.filter((b) => b.text.trim() && !have.has(b.text.trim()));
-        html = extra.length ? (padNow || '') + `<p>${esc(t('— From Google Docs —'))}</p>` + padToHtml(extra) : null;
+        // changed here and in the Doc: both kept, each line where it was
+        // written, the blank lines between notes with them
+        const mine = padBlocks(padNow || '');
+        const both = unionMerge(mine, padIn, (b) => b.text.trim());
+        html = both.length !== mine.length ? padToHtml(both) : null;
       }
       if (html != null) { putPad(html); say.push(t('Notepad')); }
     }
@@ -1024,21 +1022,39 @@
         const mine = chapterNotes[chId] || '';
         let next = text;
         if (merge) {
-          const have = new Set(mine.split('\n').map((x) => x.trim()));
-          const extra = String(text || '').split('\n').filter((x) => x.trim() && !have.has(x.trim()));
-          next = extra.length ? (mine ? mine + '\n' : '') + extra.join('\n') : mine;
+          const ours = mine ? mine.split('\n') : [];
+          const both = unionMerge(ours, String(text || '').split('\n'), (x) => x.trim());
+          next = both.length !== ours.length ? both.join('\n') : mine;
         }
         if (next !== mine) { if (next) chapterNotes[chId] = next; else delete chapterNotes[chId]; changed = true; }
       }
       if (changed) {
         saveChapterNotes();
         say.push(t('Chapter Notes'));
-        const ta = panel.querySelector('textarea');
-        if (mode === 'chapter' && !(ta && document.activeElement === ta)) drawPanel();
+        const ta = panel.querySelector('.nd-rich');
+        if (mode === 'chapter' && !(ta && ta.contains(document.activeElement))) drawPanel();
         if (currentTab === 'notes' && notesView === 'chapter' && !notesBody.contains(document.activeElement)) drawChapterList();
       }
     }
     if (say.length) toast(t('Updated from Google Docs: {names}', { names: say.join(', ') }), 5000);
+  }
+  // Two versions of a list of lines, as one: what both have, once, and what
+  // only one has, each where it stood (the lines are matched in order,
+  // longest run in common first)
+  function unionMerge(mine, theirs, key) {
+    const a = mine.map(key), b = theirs.map(key);
+    const n = a.length, m = b.length;
+    if (n * m > 4e6) return mine.concat(theirs.filter((x) => !a.includes(key(x))));
+    const L = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const out = [];
+    let i = 0, j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && a[i] === b[j]) { out.push(mine[i]); i++; j++; }
+      else if (j < m && (i === n || L[i][j + 1] >= L[i + 1][j])) out.push(theirs[j++]);
+      else out.push(mine[i++]);
+    }
+    return out;
   }
   function putPad(html) {
     writePad(html);

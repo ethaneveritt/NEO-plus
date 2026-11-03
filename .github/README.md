@@ -80,12 +80,14 @@ Move a chapter to another part in NEO and its Doc moves folders with it. Move th
 - **Comments**: open comments from the chapter Docs and the Master Manuscript, level with the words they're on, which are highlighted. Each shows who wrote it and its replies, with **Resolve** (resolved in Google Docs too); your own also have **Edit**. To make one, select words and right-click → **Add Comment…** (or Ctrl+Alt+M); it goes to the chapter's Google Doc. Comments never touch your text. Choose where they come from in **Google Drive → Show Google Docs Comments in NEO**: chapters and the Master, chapters only, or off.
 - Colors tell them apart: Google Docs comments are **yellow**, your own **blue**, placeholders **red**.
 - **Placeholders** are comments too: Ctrl+Shift+X while writing plants a flag and opens its note beside it; type what needs doing, press Enter, and you're back in the page past the flag. Flags show in the page only while Comments is open. Placeholders stay in NEO (they don't go to Google Docs).
-- **Chapter Notes**: a note for the chapter you're in; it follows you from chapter to chapter.
+- **Chapter Notes**: a note for the chapter you're in; it follows you from chapter to chapter. It keeps italics, bold and bulleted or numbered lists: paste a plan from Google Docs and it looks the same, or use ⌘I / ⌘B (Ctrl+I / Ctrl+B) as you type. In a list, Enter adds the next item (Enter on an empty one ends the list) and Tab / Shift+Tab move an item in or out.
 - **Notepad**: the whole book's notes (NEO's Notes page).
 
 The **Notes** tab has the same three at its top: **Notepad** (the Notes page as always), **Comments** (every comment and placeholder, by chapter, with **Jump to**) and **Chapter Notes** (every chapter's note in one place).
 
-The Notepad and Chapter Notes are in the book's **Notes** folder in Drive, and they work both ways: jot an idea into the Notepad Doc on your phone and it's in NEO next time it syncs. If a note changed in both places at once, nothing is lost: what's new in the Doc is added under what's in NEO. The Darlings Doc is a copy of your Darlings tab, kept for safekeeping; change Darlings in NEO.
+The Notepad and Chapter Notes are in the book's **Notes** folder in Drive, and they work both ways: jot an idea into the Notepad Doc on your phone and it's in NEO next time it syncs. If a note changed in both places at once, nothing is lost: what's new in the Doc goes in where it was written, with the blank lines between your notes. In the Chapter Notes Doc your italics are italic and your lists are Google Docs' own bullets, and bullets you add there come back as bullets.
+
+**The Outline keeps italics and lists too.** Paste a list onto an Outline line or card and it stays on that line or card as a list (italic and bold as they were), the way you'd plan it in Google Docs; ⌘I / ⌘B and Enter / Tab in a list work there as in Chapter Notes. A note is still kept as text (*italic*, **bold**, "- " for a bullet), so anywhere NEO shows a note as text it reads naturally. The Darlings Doc is a copy of your Darlings tab, kept for safekeeping; change Darlings in NEO.
 
 **Edited in both places at once** (or offline on both sides)? Nothing is thrown away: NEO keeps its version as **version N**, and the Doc's comes in right after it as **version G**. Merge them yourself, then delete the one you don't need.
 

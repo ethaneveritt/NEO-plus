@@ -344,12 +344,12 @@ test('Chapter Notes and Notepad open beside the page, one at a time, and go to a
   await js(`document.querySelector('.chapter[data-id="${c1}"] .chapter-body').focus()`);
   await tick(500);
   assert.match(await js(`document.querySelector('#nd-panel b').textContent`), /Cold Front/);
-  await js(`(() => { const ta = document.querySelector('#nd-panel textarea'); ta.focus(); document.execCommand('insertText', false, 'Make the rain colder.'); })()`);
+  await js(`(() => { const ta = document.querySelector('#nd-panel .nd-rich'); ta.focus(); document.execCommand('insertText', false, 'Make the rain colder.'); })()`);
   await tick(800);
   assert.deepEqual(await js(`window.neo.readJSON(book.id, 'neo-drive-chapter-notes', {})`), { [c1]: 'Make the rain colder.' });
   await toggle('notepad');
   await tick(300);
-  assert.equal(await js(`document.querySelector('#nd-panel textarea')`), null);
+  assert.equal(await js(`document.querySelector('#nd-panel .nd-rich')`), null);
   await js(`(() => { const box = document.querySelector('#nd-panel .nd-pad'); box.focus(); document.execCommand('insertText', false, 'Idea one.'); })()`);
   await tick(1000);
   assert.match(await js(`window.neo.readAux(book.id, 'notes')`), /Idea one\./);
@@ -385,7 +385,7 @@ test('notes written in the Docs come back into NEO', async () => {
   assert.match(await js(`document.getElementById('aux-editor').textContent`), /Idea zero\./);
   await js(`document.querySelector('#nd-notes-head [data-v="chapter"]').click()`);
   await tick(200);
-  assert.equal(await js(`document.querySelector('.nd-list textarea').value`), 'Mara needs a limp.\nMake the rain colder.');
+  assert.equal(await js(`document.querySelector('.nd-list .nd-rich').value`), 'Mara needs a limp.\nMake the rain colder.');
   await js(`switchTab('manuscript')`);
   await tick(200);
 });
@@ -418,6 +418,115 @@ test('pasting notes into the Notepad keeps the blank lines between them, in NEO 
   await sync();
   const pad = await fake({ do: 'noteDoc', key: 'notepad' });
   assert.match(await fake({ do: 'text', id: pad.id }), /Note A\n\nNote B\n\n\nNote C\n+Note D\n\nNote E\n/);
+});
+
+test('notes written in the Notepad Doc with blank lines between them keep the gaps in NEO, with no "From Google Docs" line', async () => {
+  const pad = await fake({ do: 'noteDoc', key: 'notepad' });
+  await fake({ do: 'type', id: pad.id, before: 'Note A', text: 'Phone note one.\n\nPhone note two.\n\n' });
+  await sync();
+  await tick(400);
+  await js(`switchTab('notes')`);
+  await tick(500);
+  const paras = await js(`[...document.getElementById('aux-editor').querySelectorAll('p')].map((p) => p.textContent.trim())`);
+  const at = paras.indexOf('Phone note one.');
+  assert.deepEqual(paras.slice(at, at + 5), ['Phone note one.', '', 'Phone note two.', '', 'Note A'], JSON.stringify(paras));
+  assert.ok(!paras.some((p) => /From Google Docs/.test(p)), JSON.stringify(paras));
+  await js(`switchTab('manuscript')`);
+  await tick(300);
+  // and the next sync leaves the Doc as it is: the gaps stay there too
+  await sync();
+  assert.match(await fake({ do: 'text', id: pad.id }), /Phone note one\.\n\nPhone note two\.\n\nNote A/);
+  // more written in the Doc, after NEO+ wrote: still no "From Google Docs"
+  await fake({ do: 'type', id: pad.id, before: 'Phone note one.', text: 'Phone note zero.\n\n' });
+  await sync();
+  await tick(400);
+  const html = await js(`window.neo.readAux(book.id, 'notes')`);
+  assert.doesNotMatch(html, /From Google Docs/);
+  assert.match(html, /Phone note zero\./);
+});
+
+test('Chapter Notes: a paste from Google Docs keeps its italics, bold and bullets; the Chapter Notes Doc gets real ones, and bullets typed there come back', async () => {
+  const [c1] = await chIds();
+  await js(`document.querySelector('.chapter[data-id="${c1}"] .chapter-body').focus()`);
+  await toggle('chapter');
+  await tick(500);
+  const gdocs = '<meta charset="utf-8"><b style="font-weight:normal;" id="docs-internal-guid-1"><p dir="ltr"><span style="font-style:italic;">The Tide Tables</span><span> matter here.</span></p>'
+    + '<ul><li dir="ltr" aria-level="1"><p dir="ltr"><span>first point</span></p></li><li dir="ltr" aria-level="2"><p dir="ltr"><span>deeper</span></p></li>'
+    + '<li dir="ltr" aria-level="1"><p dir="ltr"><span style="font-weight:700;">bold</span><span> point</span></p></li></ul></b>';
+  const err = await js(`(() => { try {
+    const box = document.querySelector('#nd-panel .nd-rich');
+    box.focus();
+    const r = document.createRange(); r.selectNodeContents(box); r.collapse(false);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    document.execCommand('insertParagraph');
+    const dt = new DataTransfer();
+    dt.setData('text/html', ${JSON.stringify(gdocs)});
+    dt.setData('text/plain', 'The Tide Tables matter here.\\nfirst point\\ndeeper\\nbold point');
+    box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  } catch (e) { return String(e && e.stack || e); } })()`);
+  assert.equal(err, undefined);
+  await tick(900);
+  const want = 'Mara needs a limp.\nMake the rain colder.\n*The Tide Tables* matter here.\n- first point\n  - deeper\n- **bold** point';
+  assert.equal(await js(`window.neo.readJSON(book.id, 'neo-drive-chapter-notes', {})`).then((v) => v[c1]), want);
+  assert.equal(await js(`document.querySelector('#nd-panel .nd-rich i').textContent`), 'The Tide Tables');
+  assert.equal(await js(`document.querySelectorAll('#nd-panel .nd-rich ul ul li').length`), 1);
+  if (process.env.SHOT) fs.writeFileSync(process.env.SHOT.replace(/\.png$/, '-chapternotes.png'), (await wc.capturePage()).toPNG());
+  await toggle('chapter');
+  await sync();
+  const cn = await fake({ do: 'noteDoc', key: 'chapternotes' });
+  const doc = await fake({ do: 'doc', id: cn.id });
+  const paras = doc.body.content.filter((e) => e.paragraph);
+  const text = (e) => e.paragraph.elements.map((x) => x.textRun.content).join('').replace(/\n$/, '');
+  const bullets = paras.filter((e) => e.paragraph.bullet).map((e) => [text(e), e.paragraph.bullet.nestingLevel]);
+  assert.deepEqual(bullets, [['first point', 0], ['deeper', 1], ['bold point', 0]]);
+  const tide = paras.find((e) => text(e).startsWith('The Tide Tables'));
+  assert.equal(tide.paragraph.elements[0].textRun.textStyle.italic, true);
+  // a bullet added in the Doc: after "bold point", on the phone
+  const at = await fake({ do: 'index', id: cn.id, text: 'bold point' });
+  const end = at + 'bold point'.length;
+  await fake({ do: 'batch', id: cn.id, requests: [{ insertText: { location: { index: end }, text: '\nfrom the phone' } }] });
+  await sync();
+  await tick(400);
+  assert.equal(await js(`window.neo.readJSON(book.id, 'neo-drive-chapter-notes', {})`).then((v) => v[c1]), want + '\n- from the phone');
+  // and the next sync leaves the Doc alone
+  const before = JSON.stringify((await fake({ do: 'doc', id: cn.id })).body);
+  await sync();
+  assert.equal(JSON.stringify((await fake({ do: 'doc', id: cn.id })).body), before);
+});
+
+test('notes changed in NEO and in the Notepad Doc at once: both kept, each where it was, the gaps too, no extra line', async () => {
+  const pad = await fake({ do: 'noteDoc', key: 'notepad' });
+  await fake({ do: 'type', id: pad.id, before: 'Phone note zero.', text: 'Doc note.\n\n' });
+  await js(`switchTab('notes')`);
+  await tick(500);
+  await js(`(() => {
+    const ed = document.getElementById('aux-editor');
+    ed.focus();
+    const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false);
+    getSelection().removeAllRanges(); getSelection().addRange(r);
+    document.execCommand('insertParagraph'); document.execCommand('insertParagraph');
+    document.execCommand('insertText', false, 'NEO note.');
+  })()`);
+  await tick(300);
+  await js(`switchTab('manuscript')`);
+  await tick(800);
+  await sync();
+  await tick(400);
+  const html = await js(`window.neo.readAux(book.id, 'notes')`);
+  assert.doesNotMatch(html, /From Google Docs/);
+  await js(`switchTab('notes')`);
+  await tick(500);
+  const paras = await js(`[...document.getElementById('aux-editor').querySelectorAll('p')].map((p) => p.textContent.trim())`);
+  const d = paras.indexOf('Doc note.');
+  assert.deepEqual(paras.slice(d, d + 3), ['Doc note.', '', 'Phone note zero.'], JSON.stringify(paras));
+  assert.equal(paras[paras.length - 1], 'NEO note.');
+  assert.equal(paras[paras.length - 2], '');
+  await js(`switchTab('manuscript')`);
+  await tick(300);
+  await sync();
+  const t = await fake({ do: 'text', id: pad.id });
+  assert.match(t, /Doc note\.\n\nPhone note zero\./);
+  assert.match(t, /\n\nNEO note\.\n/);
 });
 
 test('the dock: NEO\'s Notes & Comments pane gives way to it; it tucks into the edge; the page makes room, and narrows in a small window', async () => {
@@ -667,6 +776,7 @@ async function main() {
     let win;
     while (!(win = BrowserWindow.getAllWindows()[0])) await tick(50);
     wc = win.webContents;
+    if (process.env.CONSOLE) wc.on("console-message", (e, l, m) => { if (l >= 2) console.log("[r] " + m); });
     while (!(await js(`typeof library !== 'undefined' && !!library && !!window.NeoPlus`).catch(() => false))) await tick(50);
     await tick(300);
     await js(`(async () => {

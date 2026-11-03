@@ -557,6 +557,8 @@ async function fakeOp(g, msg) {
   if (msg.do === 'text') return g.docText(msg.id);
   if (msg.do === 'doc') return g.getDoc(msg.id);
   if (msg.do === 'type') { await g.typeInDoc(msg.id, g.findText(msg.id, msg.before), msg.text); return true; }
+  if (msg.do === 'index') return g.findText(msg.id, msg.text);
+  if (msg.do === 'batch') { await g.batchUpdate(msg.id, msg.requests); return true; }
   if (msg.do === 'comments') return g.listComments(msg.id);
   if (msg.do === 'readerComment') return g.addReaderComment(msg.id, msg.comment);
   if (msg.do === 'noteDoc') return [...g.files.values()].find((f) => f.appProperties.neoNote === msg.key);

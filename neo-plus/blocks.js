@@ -20,6 +20,8 @@
 //     sa sb  space above / below, in points
 //     sz     type size, in points
 //     ls     line spacing, in percent (200 = double)
+//     li     (only on a list item) 'ul' or 'ol' and its level, 'ul0' … 'ol8':
+//            a Google Docs bullet (the notes Docs; neo-plus/richnotes.js)
 //
 // Everything that decides whether two blocks are "the same" lives in
 // blockKey(), and readDoc() reads back exactly what editRequests() writes,
@@ -60,6 +62,8 @@
     }
     // a centered or right-set line has no first-line indent to speak of
     if ((out.align === 'center' || out.align === 'right') && out.ind === 'normal') out.ind = 'flush';
+    // a list item: its bullet sets it in, nothing else does
+    if (LI.test(b.li || '')) Object.assign(out, { li: b.li, ind: 'flush', align: 'left' });
     out.marks = normMarks(b.marks || [], out.text.length);
     return out;
   }
@@ -83,7 +87,8 @@
     return out;
   }
 
-  const blockKey = (b) => JSON.stringify([b.k, b.text, b.marks, b.align, b.ind, b.pb, b.sa, b.sb, b.sz, b.ls]);
+  const blockKey = (b) => JSON.stringify(b.li ? [b.k, b.text, b.marks, b.align, b.ind, b.pb, b.sa, b.sb, b.sz, b.ls, b.li] : [b.k, b.text, b.marks, b.align, b.ind, b.pb, b.sa, b.sb, b.sz, b.ls]);
+  const LI = /^(ul|ol)[0-8]$/;
   const sameBlock = (a, b) => blockKey(a) === blockKey(b);
 
   // A heading line: centered, bold all the way through. (How the chapter
@@ -188,8 +193,9 @@
         if (flags[i]) marks.push([i, j, flags[i]]);
         i = j;
       }
-      const block = text.trim() === '' && k !== 'brk' && !(opts.keepEmpty && text === '') ? null : normalize({
-        k, text, marks, align, ind,
+      const li = bulletOf(doc, el.paragraph.bullet);
+      const block = text.trim() === '' && k !== 'brk' && !li && !(opts.keepEmpty && text === '') ? null : normalize({
+        k, text, marks, align, ind, li,
         pb: !!ps.pageBreakBefore, sa: mag(ps.spaceAbove), sb: mag(ps.spaceBelow),
         sz: sz || SIZE, ls: ps.lineSpacing || 100
       });
@@ -200,10 +206,29 @@
     return { paras, blocks: paras.filter((p) => p.block).map((p) => p.block), end };
   }
   const mag = (d) => (d && d.magnitude) || 0;
+  // a paragraph's bullet as a block's li: numbered or not, and how deep
+  function bulletOf(doc, bullet) {
+    if (!bullet) return undefined;
+    const level = Math.min(8, bullet.nestingLevel || 0);
+    const list = doc && doc.lists && doc.lists[bullet.listId];
+    const lv = list && list.listProperties && list.listProperties.nestingLevels && list.listProperties.nestingLevels[level];
+    const numbered = !!(lv && lv.glyphType && lv.glyphType !== 'GLYPH_TYPE_UNSPECIFIED' && lv.glyphType !== 'NONE' && !lv.glyphSymbol);
+    return (numbered ? 'ol' : 'ul') + level;
+  }
   const fromDoc = (doc, opts) => readDoc(doc, opts).blocks;
 
   // ------------------------------------------------------------ styling
   function paraStyleRequest(b, start, end) {
+    if (b.li) {
+      // a list item's indents are its bullet's: left as Docs sets them
+      return {
+        updateParagraphStyle: {
+          range: { startIndex: start, endIndex: end },
+          paragraphStyle: { namedStyleType: 'NORMAL_TEXT', alignment: 'START', lineSpacing: b.ls, spaceAbove: PT(b.sa), spaceBelow: PT(b.sb), pageBreakBefore: b.pb },
+          fields: 'namedStyleType,alignment,lineSpacing,spaceAbove,spaceBelow,pageBreakBefore'
+        }
+      };
+    }
     return {
       updateParagraphStyle: {
         range: { startIndex: start, endIndex: end },
@@ -303,12 +328,13 @@
     const sentinelStart = lastPara && lastPara.text === '' ? lastPara.start : rd.end; // after the insert above, if any
     const owners = rd.paras.filter((p) => p.block); // the paragraph each old block lives in
     const hunks = diffBlocks(rd.blocks, want);
+    const anyBullets = want.some((b) => b.li) || ((doc && doc.body && doc.body.content) || []).some((el) => el.paragraph && el.paragraph.bullet);
     for (let h = hunks.length - 1; h >= 0; h--) {
       const { i0, i1, j0, j1 } = hunks[h];
       // one paragraph changed within itself: edit just the characters
       if (i1 - i0 === 1 && j1 - j0 === 1) {
         const o = owners[i0], ob = o.block, nb = want[j0];
-        if (ob.k === nb.k && !o.text.includes('￼')) {
+        if (ob.k === nb.k && (ob.li || '') === (nb.li || '') && !o.text.includes('￼')) {
           requests.push(...charEdit(o, ob, nb));
           continue;
         }
@@ -318,13 +344,28 @@
       if (delEnd > at) requests.push({ deleteContentRange: { range: { startIndex: at, endIndex: delEnd } } });
       if (j1 > j0) {
         const blocks = want.slice(j0, j1);
-        const text = blocks.map((b) => b.text + '\n').join('');
+        // a list item goes in with a tab for each level deeper; making it a
+        // bullet takes the tabs away and sets it that deep (Google's rule)
+        const tabs = (b) => (b.li ? Number(b.li.slice(2)) : 0);
+        const text = blocks.map((b) => '\t'.repeat(tabs(b)) + b.text + '\n').join('');
         requests.push({ insertText: { location: { index: at }, text } });
         let pos = at;
+        const runs = []; // [start, end, li type | null], paragraphs in a row
         for (const b of blocks) {
-          requests.push(paraStyleRequest(b, pos, pos + b.text.length + 1));
-          requests.push(...textStyleRequests(b, pos, b.text.length));
-          pos += b.text.length + 1;
+          const len = tabs(b) + b.text.length + 1;
+          requests.push(paraStyleRequest(b, pos, pos + len));
+          requests.push(...textStyleRequests(b, pos + tabs(b), b.text.length));
+          const type = b.li ? b.li.slice(0, 2) : null;
+          const last = runs[runs.length - 1];
+          if (last && last[2] === type) last[1] = pos + len; else runs.push([pos, pos + len, type]);
+          pos += len;
+        }
+        // what goes in takes the look of the paragraph it lands in, a
+        // bullet too: the plain ones lose it; the lists get theirs, last
+        // first (each takes its tabs away, moving what comes after)
+        if (anyBullets) for (const [s0, e0, type] of runs) if (!type) requests.push({ deleteParagraphBullets: { range: { startIndex: s0, endIndex: e0 } } });
+        for (const [s0, e0, type] of runs.slice().reverse()) {
+          if (type) requests.push({ createParagraphBullets: { range: { startIndex: s0, endIndex: e0 }, bulletPreset: type === 'ol' ? 'NUMBERED_DECIMAL_ALPHA_ROMAN' : 'BULLET_DISC_CIRCLE_SQUARE' } });
         }
       }
     }
@@ -399,7 +440,96 @@
     return normalize({ k: 'p', text, marks, align: 'center', ind: 'flush', ...extra });
   }
 
+  // ------------------------------------------------- notes as plain text
+  // A note (Chapter Notes, an outline card) is kept as text, a line per
+  // paragraph, with its italics and lists written the way people type them:
+  //   *italic*  **bold**  ***both***      \* a star that is just a star
+  //   - a bullet        (two spaces before it for each level deeper)
+  //   1. a numbered item
+  // so it reads well anywhere NEO shows it as text, and a note with none of
+  // these is just its words. A line as a block, and back:
+  const LIST_LINE = /^( *)(?:[-*•●○◦▪■]|(\d+)[.)]) +(.*)$/;
+  function mdToBlock(line, extra = {}) {
+    let li;
+    let body = String(line || '');
+    const m = LIST_LINE.exec(body);
+    if (m) { li = (m[2] ? 'ol' : 'ul') + Math.min(8, Math.floor(m[1].length / 2)); body = m[3]; }
+    else if (body[0] === '\\' && LIST_LINE.test(body.slice(1))) body = body.slice(1); // "\- not a bullet"
+    const { text, marks } = parseInline(body);
+    return normalize({ k: 'p', text, marks, ind: 'flush', ...extra, ...(li ? { li } : {}) });
+  }
+  function blockToMd(b) {
+    const pre = b.li ? '  '.repeat(Number(b.li.slice(2))) + (b.li.startsWith('ol') ? '1. ' : '- ') : '';
+    const text = String(b.text || '').split('\u000b').join(' ').split('￼').join('');
+    const marks = normMarks(b.marks || [], text.length);
+    // a star is escaped only where it would otherwise read as italic, so a
+    // note with "2 * 3" in it is kept as it was typed
+    const bare = inlineMd(text, marks, false);
+    const back = parseInline(bare);
+    const same = back.text === text && JSON.stringify(normMarks(back.marks, text.length)) === JSON.stringify(marks);
+    const line = same ? bare : inlineMd(text, marks, true);
+    // a line that would read as a list item without being one
+    return pre + (!b.li && LIST_LINE.test(line) ? '\\' + line : line);
+  }
+  function parseInline(s) {
+    let text = '';
+    const marks = [];
+    const esc = (j) => s[j] === '\\' && (s[j + 1] === '*' || s[j + 1] === '\\');
+    const closeOf = (from, m, to) => {
+      for (let j = from; j < to; j++) {
+        if (esc(j)) { j++; continue; }
+        if (s.startsWith(m, j) && !/\s/.test(s[j - 1]) && j > from) {
+          if (m === '*' && s[j + 1] === '*') { j++; continue; }
+          return j;
+        }
+      }
+      return -1;
+    };
+    const walk = (i, to, f) => {
+      while (i < to) {
+        if (esc(i)) { add(s[i + 1], f); i += 2; continue; }
+        if (s[i] === '*') {
+          const m = /^\*{1,3}/.exec(s.slice(i, to))[0];
+          const after = s[i + m.length];
+          const c = after && !/\s/.test(after) ? closeOf(i + m.length, m, to) : -1;
+          if (c > 0) {
+            const nf = f + (m.length !== 2 && !f.includes('i') ? 'i' : '') + (m.length >= 2 && !f.includes('b') ? 'b' : '');
+            walk(i + m.length, c, nf);
+            i = c + m.length;
+            continue;
+          }
+          add(m, f); i += m.length; continue;
+        }
+        add(s[i], f); i++;
+      }
+    };
+    const add = (t, f) => { if (f) marks.push([text.length, text.length + t.length, f]); text += t; };
+    walk(0, s.length, '');
+    return { text, marks };
+  }
+  function inlineMd(text, marks, escape = true) {
+    const per = new Array(text.length).fill('');
+    for (const [s0, e0, f] of marks) for (let i = Math.max(0, s0); i < Math.min(text.length, e0); i++) per[i] += f;
+    const e = (t) => (escape ? t.replace(/[\\*]/g, (c) => '\\' + c) : t);
+    let out = '';
+    for (let i = 0; i < text.length;) {
+      const f = (per[i].includes('b') ? 'b' : '') + (per[i].includes('i') ? 'i' : '');
+      let j = i + 1;
+      while (j < text.length && ((per[j].includes('b') ? 'b' : '') + (per[j].includes('i') ? 'i' : '')) === f) j++;
+      const run = text.slice(i, j);
+      if (!f || !run.trim()) out += e(run);
+      else {
+        const m = f === 'bi' ? '***' : f === 'b' ? '**' : '*';
+        const lead = /^\s*/.exec(run)[0], trail = /\s*$/.exec(run)[0];
+        out += lead + m + e(run.trim()) + m + trail;
+      }
+      i = j;
+    }
+    return out;
+  }
+
   const api = {
+    mdToBlock, blockToMd, parseInline, inlineMd,
     normalize, blockKey, sameBlock, isHeading, heading, fromNeoPara, readDoc, fromDoc, diffBlocks,
     editRequests, fillRequests, toNeoHtml, plain, tidyBlanks, BREAK_TEXT
   };

@@ -553,7 +553,7 @@
   // the system checker underlines only where spellcheck is on
   function syncSpellAttrs() {
     const on = sysSpell && typeof spellOn !== 'undefined' && !!spellOn;
-    for (const el of document.querySelectorAll('#chapters .chapter-body, #aux-editor, #nd-panel .nd-pad, #nd-panel textarea, .nd-list textarea')) {
+    for (const el of document.querySelectorAll('#chapters .chapter-body, #aux-editor, #nd-panel .nd-pad, #nd-panel textarea, .nd-list textarea, .nd-rich')) {
       if (el.spellcheck !== on) el.spellcheck = on;
     }
   }
