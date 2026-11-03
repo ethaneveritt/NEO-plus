@@ -150,6 +150,45 @@ test('Chapter Notes: ⌘I and a pasted list, saved as text', async () => {
   if (SHOT) fs.writeFileSync(SHOT.replace(/\.png$/, '-notes.png'), (await wc.capturePage()).toPNG());
 });
 
+test('the Outline\'s words: shown on its tab, and counted in today\'s writing; words from disk are not', async () => {
+  await js(`switchTab('outline')`);
+  await tick(600);
+  const counter = () => js(`document.getElementById('word-counter').textContent`);
+  const today = () => js(`(() => { const e = book.dailyCounts[todayStr()]; return e ? e.end - e.start : 0; })()`);
+  const n0 = await js('NeoPlusOutlineCount.words()');
+  assert.ok(n0 > 0);
+  assert.equal(await counter(), `${n0} words in the outline`);
+  // a click: the book's count; another: the outline's again
+  await js(`document.getElementById('word-counter').click()`);
+  assert.match(await counter(), /^\d+ words$/);
+  await js(`document.getElementById('word-counter').click()`);
+  assert.match(await counter(), /in the outline/);
+  // typing on a line: today grows as it's typed
+  const d0 = await today();
+  const ch = await js('book.chapterOrder[2]');
+  const line = `document.querySelector('#outline-list .ol-line.ol-chapter[data-ch-id="${ch}"] .ol-text')`;
+  await js(`(() => { const el = ${line}; el.focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); document.execCommand('insertText', false, 'the boat comes in'); })()`);
+  await tick(700);
+  assert.equal(await today(), d0 + 4, 'counted while typing');
+  assert.equal(await counter(), `${n0 + 4} words in the outline`);
+  await js(`${line}.blur()`);
+  await tick(2500);
+  assert.equal(await today(), d0 + 4, 'and not again once saved');
+  // cut two words: today goes down by two
+  await js(`(() => { const el = ${line}; el.focus(); el.textContent = 'the boat'; el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await tick(700);
+  assert.equal(await today(), d0 + 2);
+  await js(`${line}.blur()`);
+  await tick(500);
+  // an outline that changed on disk (another computer): not today's writing
+  await js(`(() => { book.chapterNotes[book.chapterOrder[2]] = 'the boat came in from the other computer with five more words'; wordsFromDisk(); renderOutline(); })()`);
+  await tick(2500);
+  assert.equal(await today(), d0 + 2);
+  await js(`switchTab('manuscript')`);
+  await tick(300);
+  assert.doesNotMatch(await counter(), /outline/);
+});
+
 async function main() {
   await app.whenReady();
   let failed = 0;

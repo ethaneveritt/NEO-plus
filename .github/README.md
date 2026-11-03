@@ -87,6 +87,8 @@ The **Notes** tab has the same three at its top: **Notepad** (the Notes page as 
 
 The Notepad and Chapter Notes are in the book's **Notes** folder in Drive, and they work both ways: jot an idea into the Notepad Doc on your phone and it's in NEO next time it syncs. If a note changed in both places at once, nothing is lost: what's new in the Doc goes in where it was written, with the blank lines between your notes. In the Chapter Notes Doc your italics are italic and your lists are Google Docs' own bullets, and bullets you add there come back as bullets.
 
+**The Outline's words count.** On the Outline tab, the word count at the bottom of the window shows how many words your outline holds (click it for the book's count, and again to go back). Words you write in the outline count toward today's words and your daily goal, as you type them, just like words on the page; words cut there come off. An outline that arrives from another computer isn't counted as today's writing.
+
 **The Outline keeps italics and lists too.** Paste a list onto an Outline line or card and it stays on that line or card as a list (italic and bold as they were), the way you'd plan it in Google Docs; ⌘I / ⌘B and Enter / Tab in a list work there as in Chapter Notes. A note is still kept as text (*italic*, **bold**, "- " for a bullet), so anywhere NEO shows a note as text it reads naturally. The Darlings Doc is a copy of your Darlings tab, kept for safekeeping; change Darlings in NEO.
 
 **Edited in both places at once** (or offline on both sides)? Nothing is thrown away: NEO keeps its version as **version N**, and the Doc's comes in right after it as **version G**. Merge them yourself, then delete the one you don't need.
