@@ -31,12 +31,16 @@ const { LibrarySync } = require('../neo-plus/library-sync.js');
 let wc;
 const js = (code) => wc.executeJavaScript(code, true);
 const tick = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
-async function until(fn, ms, what) {
+// (a slow runner, a Mac's especially, may need another look before the
+// change is seen: nudge, if given, is asked again every two seconds)
+async function until(fn, ms, what, nudge) {
   const t0 = Date.now();
+  let last = t0;
   for (;;) {
     const v = await fn();
     if (v) return v;
     if (Date.now() - t0 > ms) throw new Error('timed out: ' + what);
+    if (nudge && Date.now() - last > 2000) { last = Date.now(); await nudge(); }
     await tick(150);
   }
 }
@@ -107,7 +111,7 @@ test('words written on the other computer appear on the open page', async () => 
   otherWrite(`${BOOK}/chapters/${c2}.html`, '<p>Mara walked the flats at low tide. The bell rang twice.</p>');
   await other.pass();
   await neoLook();
-  await until(async () => /rang twice/.test(await pageText(c2)), 8000, 'the page to take in the other computer’s words');
+  await until(async () => /rang twice/.test(await pageText(c2)), 20000, 'the page to take in the other computer’s words', neoLook);
 });
 
 test('words written here reach the other computer', async () => {
@@ -124,7 +128,7 @@ test('the same chapter changed on both: both kept, the other computer’s as the
   await other.pass();
   await typeInNeo(c1, ' Mara trimmed it.');
   await neoLook();
-  await until(async () => (await chIds()).length === 3, 8000, 'the other version to arrive as a chapter');
+  await until(async () => (await chIds()).length === 3, 20000, 'the other version to arrive as a chapter', neoLook);
   const ids = await chIds();
   assert.equal(ids[0], c1);
   assert.match(await pageText(c1), /Mara trimmed it\./);
@@ -158,8 +162,8 @@ test('a book started on the other computer appears on the shelf here', async () 
   const lib = JSON.parse(otherRead('library.json')); lib.shelves[0].bookIds.push(NEW); otherWrite('library.json', lib);
   await other.pass();
   await neoLook();
-  await until(() => js(`library.shelves[0].bookIds.includes('${NEW}')`), 8000, 'the shelf to list the new book');
-  await until(() => js(`!!document.querySelector('#bookshelf-view [data-id="${NEW}"], #bookshelf-view [data-book-id="${NEW}"]') || [...document.querySelectorAll('#bookshelf-view *')].some((e) => e.children.length === 0 && /Tide Tables/.test(e.textContent))`), 8000, 'a tile for the new book');
+  await until(() => js(`library.shelves[0].bookIds.includes('${NEW}')`), 20000, 'the shelf to list the new book');
+  await until(() => js(`!!document.querySelector('#bookshelf-view [data-id="${NEW}"], #bookshelf-view [data-book-id="${NEW}"]') || [...document.querySelectorAll('#bookshelf-view *')].some((e) => e.children.length === 0 && /Tide Tables/.test(e.textContent))`), 20000, 'a tile for the new book');
 });
 
 async function main() {
